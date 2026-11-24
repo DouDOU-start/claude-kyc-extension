@@ -11,6 +11,11 @@ const PAC_TYPES = {
   "socks5:": "SOCKS5",
   "socks5h:": "SOCKS5",
 };
+const REGIONS = [
+  "US", "GB", "DE", "FR", "NL", "IE", "SE", "CH",
+  "JP", "KR", "SG", "AU", "NZ", "CA",
+  "IT", "ES", "PT", "AT", "BE", "DK", "NO", "FI", "PL",
+];
 
 function decodePart(value) {
   try {
@@ -21,7 +26,7 @@ function decodePart(value) {
 }
 
 export function parseProxy(raw) {
-  const input = String(raw ?? "").trim();
+  const input = resolveProxyTemplate(String(raw ?? "")).trim();
   if (!input) return { ok: true, value: null };
   if (input.length > 8192 || /[\r\n]/.test(input)) {
     return { ok: false, error: "代理地址格式无效。" };
@@ -73,6 +78,16 @@ export function parseProxy(raw) {
       secret,
     },
   };
+}
+
+export function resolveProxyTemplate(raw) {
+  if (!raw.includes("{")) return raw;
+  const random = crypto.getRandomValues(new Uint8Array(5));
+  const region = REGIONS[random[0] % REGIONS.length];
+  const session = [...random.subarray(1)]
+    .map((value) => value.toString(16).padStart(2, "0"))
+    .join("");
+  return raw.replaceAll("{region}", region).replaceAll("{session}", session);
 }
 
 export function proxyAuthRecord(config) {

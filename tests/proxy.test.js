@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseProxy, proxyAuthRecord, proxyPAC } from "../extension/lib/proxy.js";
+import { parseProxy, proxyAuthRecord, proxyPAC, resolveProxyTemplate } from "../extension/lib/proxy.js";
 
 test("proxy parser supports URLs and vendor formats", () => {
   assert.equal(parseProxy("").value, null);
@@ -47,4 +47,12 @@ test("PAC and auth records contain only the requested proxy", () => {
   const auth = proxyAuthRecord(config);
   assert.equal(auth.username, "user");
   assert.equal(Object.values(auth)[1], demoSecret);
+});
+
+test("rotating proxy placeholders are resolved", () => {
+  const first = resolveProxyTemplate("http://user-{region}-{session}@proxy.example:8080");
+  const second = resolveProxyTemplate("http://user-{region}-{session}@proxy.example:8080");
+  assert.doesNotMatch(first, /\{(region|session)\}/);
+  assert.match(first, /user-[A-Z]{2}-[0-9a-f]{8}@/);
+  assert.notEqual(first, second);
 });
