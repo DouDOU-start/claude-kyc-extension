@@ -24,7 +24,9 @@
       <label class="field">
         <span>代理 IP</span>
         <input id="proxy" name="proxy" type="text" autocomplete="off" spellcheck="false"
-          placeholder="http://host:port 或 host:port:用户名:密码" maxlength="8192">
+          placeholder="http://host:port 或 socks5://host:port"
+          title="支持 http://host:port、socks5://host:port，以及带用户名密码的认证格式"
+          maxlength="8192">
       </label>
     </section>
 
@@ -65,12 +67,10 @@
 
       <section id="result" class="panel result" hidden>
         <div class="result-top">
-          <div>
-            <div id="status-label" class="status-label"></div>
-            <div id="result-org" class="result-org"></div>
-          </div>
+          <div id="status-label" class="status-label"></div>
           <div id="result-time" class="result-time"></div>
         </div>
+        <div id="result-org" class="result-org"></div>
 
         <div id="actions" class="result-actions">
           <button id="refresh-status" class="secondary" type="button">刷新状态</button>

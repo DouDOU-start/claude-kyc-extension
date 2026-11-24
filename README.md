@@ -18,7 +18,7 @@ A pure Manifest V3 browser extension for checking Claude account KYC status with
 - Organizations are discovered from the session key; choose one only when multiple are available.
 - Explicit refresh and retry actions for KYC verification.
 - HTTPS-only vendor link validation and a 60-second temporary link window.
-- HTTP, HTTPS, SOCKS5, and SOCKS5H proxy support with optional authentication.
+- HTTP and SOCKS5 proxy support with optional authentication.
 - Rotating proxy placeholders: `{session}` and `{region}`.
 - Automatic update checks against GitHub Releases.
 - No project backend, telemetry, or analytics.
@@ -67,11 +67,9 @@ Batch mode performs status queries only. Use single mode when you need to reques
 
 ```text
 http://host:port
-https://host:port
 socks5://host:port
-socks5h://host:port
 host:port
-host:port:username:credential
+host:port:username:secret
 ```
 
 The proxy is applied only to `claude.ai` through a temporary PAC configuration. The extension restores the browser proxy setting when the request ends, and also uses a cleanup alarm if the service worker is interrupted.

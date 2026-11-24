@@ -3,6 +3,8 @@
 ## 1.1.1
 
 - Center batch result headers and cells horizontally and vertically.
+- Vertically center the single-result status and query time on the same line.
+- Clarify the proxy field for HTTP and SOCKS5 formats.
 
 ## 1.1.0
 
