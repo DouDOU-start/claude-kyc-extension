@@ -1,7 +1,7 @@
 {
   "name": "claude-kyc-extension",
   "version": "1.0.0",
-  "description": "Optional organization ID and GitHub release tests for the Claude KYC extension.",
+  "description": "Pure Manifest V3 Claude KYC browser extension and tests.",
   "private": true,
   "type": "module",
   "scripts": {

@@ -3,59 +3,45 @@
 ## Components
 
 ```text
-Chrome extension
-  app.html / app.js
+Extension page (app.html / app.js)
         |
-        | Native Messaging (stdio, no TCP port)
+        | chrome.runtime.sendMessage
         v
-kyc-host.exe
-  |-- organizations
-  |-- KYC status / refresh / retry
-  |-- update check / download / apply
+Background service worker
+  |-- temporary PAC proxy configuration
+  |-- proxy authentication provider
+  |-- request-scoped Cookie header
+  |-- Claude API requests
+  |-- GitHub update check link
         |
-        +--> claude.ai through optional proxy
-        +--> GitHub Releases for updates
+        +--> claude.ai
+        +--> api.github.com
 ```
 
-## Browser extension
+## Request flow
 
-The Manifest V3 extension owns the UI and all user-visible state. It:
+1. The page validates SK, proxy, and optional organization ID.
+2. The background service worker receives the request over a private extension message.
+3. If a proxy is configured, it generates a PAC script that routes only `claude.ai` through that proxy.
+4. Proxy credentials are placed in session storage for the auth provider.
+5. A session-scoped declarative-net-request rule adds `Cookie: sessionKey=...` only to the request carrying a random header nonce.
+6. Chromium performs the HTTPS request using its own network stack.
+7. The extension clears the proxy rule, cookie rule, credentials, and alarm.
 
-- keeps the session key in `sessionStorage`;
-- stores the proxy in local browser storage;
-- skips organization discovery when an organization ID is provided;
-- validates vendor links before displaying them;
-- never polls KYC status automatically;
-- checks for updates at most once per day when installed from the managed folder.
+Requests are serialized because proxy configuration is profile-wide.
 
-## Native host
+## Failure cleanup
 
-The Go native host is started by Chrome for a single request window. It:
-
-- reads Chrome's length-prefixed JSON messages from stdin;
-- builds a Chrome-impersonating `surf` client;
-- sends the session key only to `claude.ai`;
-- validates response shapes and HTTP errors;
-- returns a normalized JSON response on stdout.
-
-The host opens no listening socket.
+- A `finally` block clears the proxy, request rule, and credentials.
+- A two-minute cleanup alarm is created for every request. It removes stale proxy state if the service worker is suspended or the extension page closes unexpectedly.
+- Browser startup and extension installation/update also trigger cleanup.
 
 ## Update flow
 
-1. The extension reads its `installation.json` marker.
-2. If managed, it calls `checkUpdate`.
-3. The host queries the pinned GitHub Releases API.
-4. `prepareUpdate` downloads the matching release ZIP and verifies its SHA-256.
-5. The ZIP is extracted with traversal protection and validated.
-6. `applyUpdate` copies the new extension files while preserving `installation.json`.
-7. A detached `kyc-updater.exe` waits for the native host to exit and replaces the host binaries.
-8. The extension calls `chrome.runtime.reload()`.
-
-The update package is never executed from the download directory.
+The extension checks `api.github.com/repos/DouDOU-start/claude-kyc-extension/releases/latest` at most once per day. If a newer version exists, the page shows a banner linking to the GitHub release. Sideloaded extensions cannot replace their own files; store-distributed copies update through Chrome.
 
 ## Trust boundaries
 
-- The session key crosses the extension/native-host boundary but is not persisted by the host.
-- Proxy credentials stay inside the local process and proxy connection.
-- GitHub controls update availability. SHA-256 prevents accidental corruption, not a compromised repository.
-- Native Messaging restricts host access to the configured extension ID.
+- The session key is kept in page memory and sent only to `claude.ai`.
+- The proxy credential is held temporarily in browser session storage and supplied only to proxy authentication challenges.
+- Existing Claude cookies are neither read nor overwritten.

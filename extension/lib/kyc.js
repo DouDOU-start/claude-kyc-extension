@@ -1,4 +1,5 @@
 export const KYC_LINK_MS = 60 * 1000;
+export const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 
 const STATUS_LABELS = Object.freeze({
   verified: "已验证",
@@ -22,14 +23,6 @@ export function normalizeSessionKey(raw) {
     return code < 0x21 || code > 0x7e || char === ";" || char === '"' || char === "\\";
   })) {
     return { ok: false, error: "SK 格式无效，请重新复制。" };
-  }
-  return { ok: true, value };
-}
-
-export function normalizeProxy(raw) {
-  const value = String(raw ?? "").trim();
-  if (value.length > 8192 || /[\r\n]/.test(value)) {
-    return { ok: false, error: "代理地址格式无效。" };
   }
   return { ok: true, value };
 }
@@ -61,6 +54,66 @@ export function statusTone(status) {
   return "pending";
 }
 
+export function parseOrganizations(text) {
+  let payload;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    return { ok: false, error: "Claude 组织响应无效。" };
+  }
+  if (!Array.isArray(payload) || payload.length > 100) {
+    return { ok: false, error: "Claude 组织响应无效。" };
+  }
+  const organizations = [];
+  const seen = new Set();
+  for (const item of payload) {
+    const id = typeof item?.uuid === "string" ? item.uuid : "";
+    const name = typeof item?.name === "string" ? item.name : "";
+    if (!id || id.length > 128 || /\s/.test(id)) {
+      return { ok: false, error: "Claude 组织响应无效。" };
+    }
+    if (seen.has(id)) continue;
+    seen.add(id);
+    organizations.push({ id, name: name.slice(0, 500) });
+  }
+  return { ok: true, value: organizations };
+}
+
+export function parseKYCStatus(text) {
+  let payload;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    return { ok: false, error: "Claude KYC 状态响应无效。" };
+  }
+  const status = typeof payload?.status === "string" ? payload.status : "";
+  if (!status || status.length > 64 || /\s/.test(status)) {
+    return { ok: false, error: "Claude KYC 状态响应无效。" };
+  }
+  if ("should_poll" in payload && typeof payload.should_poll !== "boolean") {
+    return { ok: false, error: "Claude KYC 状态响应无效。" };
+  }
+  const result = {
+    status,
+    should_poll: Boolean(payload.should_poll),
+    updated_at: typeof payload.updated_at === "string" ? payload.updated_at : undefined,
+    completed_at: typeof payload.completed_at === "string" ? payload.completed_at : undefined,
+    vendor_inquiry_url: typeof payload.vendor_inquiry_url === "string" ? payload.vendor_inquiry_url : "",
+    vendor_inquiry_id: typeof payload.vendor_inquiry_id === "string" ? payload.vendor_inquiry_id : "",
+  };
+  if (isComplete(status) || isFailed(status)) {
+    result.should_poll = false;
+    result.vendor_inquiry_url = "";
+    result.vendor_inquiry_id = "";
+  }
+  if (result.vendor_inquiry_url) {
+    if (!vendorURL(result.vendor_inquiry_url)) {
+      return { ok: false, error: "Claude 返回了无效的验证链接。" };
+    }
+  }
+  return { ok: true, value: result };
+}
+
 export function actionOptions(action) {
   return {
     refreshSession: action !== "status",
@@ -89,19 +142,6 @@ export function mergeKYC(previous, next) {
     return { result: previous, ignored: true };
   }
   return { result: next, ignored: false };
-}
-
-export function hostErrorMessage(code, fallback) {
-  const messages = {
-    host_missing: "本地查询组件未连接。请先运行安装包中的 install.ps1，然后重新打开本页。",
-    host_disconnected: "本地查询组件意外断开，请重新查询。",
-    timeout: "查询超时，请检查代理后重试。",
-    update_check_failed: "检查更新失败，请稍后重试。",
-    update_download_failed: "下载或校验更新失败，请稍后重试。",
-    update_not_ready: "更新尚未准备完成，请重新检查更新。",
-    update_apply_failed: "应用更新失败，请关闭本页后重试。",
-  };
-  return messages[code] || fallback || "查询失败，请检查 SK、代理和网络后重试。";
 }
 
 export function formatTime(value) {

@@ -1,90 +1,55 @@
 # Claude KYC Extension
 
-A Windows browser extension for checking Claude account KYC status with a Claude web session key and an HTTP, HTTPS, SOCKS5, or SOCKS5H proxy.
+A pure Manifest V3 browser extension for checking Claude account KYC status with a Claude web session key and an optional HTTP, HTTPS, SOCKS5, or SOCKS5H proxy.
 
 [中文说明](README.zh-CN.md)
 
 ![Claude KYC extension](docs/screenshot.png)
 
-> This is an independent open-source tool. It is not affiliated with Anthropic, Claude, Persona, Google, or Microsoft. Use it only with accounts and proxies you are authorized to access.
+> Independent open-source project. Not affiliated with Anthropic, Claude, Persona, Google, or Microsoft. Use it only with accounts and proxies you are authorized to access.
 
 ## Features
 
-- Check Claude KYC status without creating or saving an internal account.
-- Optional organization ID; when omitted, organizations are discovered from the session key.
-- Explicit actions for refreshing the vendor verification link and retrying verification.
+- No installer, native helper, local server, or Go runtime.
+- Load the same folder into Chrome or Edge.
+- Optional organization ID; omitted means organizations are discovered from the session key.
+- Explicit refresh and retry actions for KYC verification.
 - HTTPS-only vendor link validation and a 60-second temporary link window.
-- Chrome-compatible TLS/HTTP fingerprinting through a small local Go helper.
-- Proxies with optional authentication, including `{session}` and `{region}` templates.
-- Automatic update checks against GitHub Releases with SHA-256 verification.
-- No project server, telemetry, or analytics.
-
-## Why a native helper?
-
-Chrome extensions cannot reliably reproduce the request fingerprint required by Claude, and Manifest V3 extensions cannot safely handle every authenticated proxy configuration. The browser extension therefore talks to a local native-messaging helper over Chrome's private stdio channel. The helper is started on demand and does not open a local port.
-
-The extension itself remains the UI and state owner. The helper only performs the Claude request, exits, and never stores the session key.
+- HTTP, HTTPS, SOCKS5, and SOCKS5H proxy support with optional authentication.
+- Rotating proxy placeholders: `{session}` and `{region}`.
+- Automatic update checks against GitHub Releases.
+- No project backend, telemetry, or analytics.
 
 ## Requirements
 
-- Windows 10 or Windows 11
-- Chrome, Edge, Brave, or another Chromium browser with native messaging support
-- A Claude web `sessionKey` (not an Anthropic API key)
-- Optional proxy
+- Chrome or another Chromium browser based on Chrome 148 or newer
+- A Claude web `sessionKey`, not an Anthropic API key
+- An optional proxy
 
-## Install from GitHub Releases
+Chrome 148+ is required because authenticated proxies use the `webRequestAuthProvider` permission.
 
-1. Open the [Releases](https://github.com/DouDOU-start/claude-kyc-extension/releases) page.
+## Install
+
+1. Open [Releases](https://github.com/DouDOU-start/claude-kyc-extension/releases).
 2. Download the latest `claude-kyc-extension-vX.Y.Z.zip`.
-3. Extract the archive.
-4. Double-click `安装.cmd` (`Install.cmd` on non-Chinese Windows).
-5. Open `chrome://extensions` or `edge://extensions`.
-6. Enable **Developer mode**.
-7. Click **Load unpacked** and select:
+3. Extract the ZIP.
+4. Open `chrome://extensions` or `edge://extensions`.
+5. Enable **Developer mode**.
+6. Click **Load unpacked** and select the extracted folder.
 
-   ```text
-   %LOCALAPPDATA%\ClaudeKYC\extension
-   ```
+The selected folder must contain `manifest.json` directly. To run from source, select the `extension` folder in this repository.
 
-Do not select `%LOCALAPPDATA%\ClaudeKYC` itself. Chrome needs `manifest.json` directly inside the selected folder.
-
-Chrome does not allow normal sideloaded extensions to install themselves silently. The first installation therefore needs these steps. Subsequent versions are checked and installed through the bundled updater.
-
-## Publishing this repository
-
-The default configuration expects a public repository named:
-
-```text
-https://github.com/DouDOU-start/claude-kyc-extension
-```
-
-Create that public repository and push this project, or change the repository in `project.json` and `extension/manifest.template.json` before building. The GitHub repository must be public for the unauthenticated updater check.
-
-Create a release tag matching the extension version, for example:
-
-```powershell
-git tag -a v1.0.0 -m "v1.0.0"
-git push origin v1.0.0
-```
-
-The included release workflow publishes the ZIP and `SHA256SUMS.txt`. See [docs/RELEASE.md](docs/RELEASE.md).
-
-Pushing a tag such as `v1.0.1` automatically:
-
-- runs all tests;
-- builds `kyc-host.exe`, `kyc-updater.exe`, and the extension package on `windows-latest`;
-- creates the GitHub Release;
-- uploads the update ZIP and SHA-256 checksum file.
+Chrome does not install a ZIP by dragging it onto the extensions page; extract the ZIP first. There is no setup executable.
 
 ## Usage
 
 1. Click the Claude KYC toolbar button.
-2. Enter a proxy. Leave it empty for a direct connection.
+2. Enter a proxy, or leave it empty to use the browser's current network.
 3. Enter the Claude web `sessionKey`.
-4. Optionally enter an organization ID. If omitted, the extension lists organizations visible to the session.
+4. Optionally enter an organization ID.
 5. Click **查询 KYC** / **Check KYC**.
-6. Use **获取验证链接** to request an official Persona link.
-7. Complete verification in the browser, then return and click **刷新状态**.
+6. Click **获取验证链接** to request the official Persona URL.
+7. Finish verification in the browser, then click **刷新状态**.
 
 ### Proxy formats
 
@@ -97,99 +62,104 @@ host:port
 host:port:username:credential
 ```
 
-Rotating proxies may contain `{session}` and `{region}` placeholders. They are resolved for every request.
+The proxy is applied only to `claude.ai` through a temporary PAC configuration. The extension restores the browser proxy setting when the request ends, and also uses a cleanup alarm if the service worker is interrupted.
 
-## Automatic updates
+## How it works
 
-When the extension is loaded from the installed folder:
+- The session key is written into a request-scoped `Cookie` header with `declarativeNetRequest`.
+- The extension does not read or overwrite your existing Claude cookies.
+- Proxy authentication is supplied by `chrome.webRequest.onAuthRequired` and is kept only in session storage during the request.
+- Requests run in the extension background service worker using Chromium's real network stack.
 
-1. The extension checks the latest GitHub Release at most once per day.
-2. A newer version shows an update banner.
-3. One click downloads the release, verifies its SHA-256 value, updates the extension and native helper, and reloads the extension.
+## Updates
 
-The updater only accepts release assets from the configured GitHub repository. The release must contain:
+GitHub Actions builds and publishes a release whenever a `v*` tag is pushed.
 
-- `claude-kyc-extension-vX.Y.Z.zip`
-- `SHA256SUMS.txt`
+For GitHub-installed copies, the extension checks the latest release at most once per day and shows a download button when a newer version exists. Chromium does not allow a sideloaded extension to silently replace itself. Download the new ZIP, extract it over the old folder, and click **Reload** on the extension card.
 
-The release page and update server are not contacted with the session key or proxy.
+If the extension is published to the Chrome Web Store, Chrome handles automatic updates normally.
 
-### Chrome Web Store
+## Permissions
 
-Publishing to the Chrome Web Store would remove the initial “Load unpacked” step and let Chrome update the extension automatically. This repository can be used as the extension source, but the native helper still needs a Windows installer. The current GitHub release package is the fully self-contained distribution.
-
-See [docs/CHROME_WEB_STORE.md](docs/CHROME_WEB_STORE.md) for permission and packaging notes.
+| Permission | Purpose |
+| --- | --- |
+| `proxy` | Temporarily route `claude.ai` through the entered proxy |
+| `webRequest` + `webRequestAuthProvider` | Supply optional proxy authentication |
+| `declarativeNetRequestWithHostAccess` | Add the session key to the request without touching browser cookies |
+| `storage` | Keep the proxy and temporary proxy credentials in browser-managed storage |
+| `clipboardWrite` | Copy the verification URL |
+| `host_permissions` | Access `claude.ai` and the GitHub Releases API |
 
 ## Privacy and security
 
-- The session key is held in the extension page's `sessionStorage`; closing the tab clears it.
-- The proxy is stored in the extension's local browser storage.
-- The session key is sent only to `claude.ai` through the chosen proxy.
-- The helper does not persist the session key or proxy.
-- The project has no backend, telemetry, or analytics.
-- Verification links are accepted only over HTTPS and are never opened automatically.
+- The session key is held in the extension page's `sessionStorage` and is cleared when the tab closes.
+- The proxy URL is stored in local browser storage.
+- No project server is used.
+- The extension never sends the session key or proxy to GitHub.
+- Vendor links are accepted only over HTTPS and are never opened automatically.
 
 See [PRIVACY.md](PRIVACY.md) and [SECURITY.md](SECURITY.md).
 
-## Build from source
+## Development
 
-Requirements:
+There is no build step. Load the `extension` directory as an unpacked extension.
 
-- Go 1.27+
-- Node.js 20+
-- Windows PowerShell 5.1 or PowerShell 7
+Run tests:
 
-```powershell
-git clone https://github.com/DouDOU-start/claude-kyc-extension.git
-cd claude-kyc-extension
-powershell -ExecutionPolicy Bypass -File .\scripts\build.ps1
-```
-
-Outputs:
-
-```text
-dist\ClaudeKYC\
-dist\claude-kyc-extension-v1.0.0.zip
-dist\SHA256SUMS.txt
-```
-
-## Tests
-
-```powershell
-cd extension
+```sh
 node --test tests/*.test.js
-cd ..
-go test ./...
-go vet ./...
 ```
 
-The test suite covers request validation, session handling, authenticated proxy tunneling, KYC response parsing, terminal status handling, native-message framing, update metadata, SHA-256 verification, ZIP traversal protection, and extension update installation.
+Run syntax checks:
+
+```sh
+node --check extension/app.js
+node --check extension/background.js
+node --check extension/lib/api.js
+node --check extension/lib/proxy.js
+node --check extension/lib/release.js
+```
 
 ## Project layout
 
 ```text
-cmd/kyc-host/          Native messaging host
-cmd/kyc-updater/       Post-exit helper updater
-internal/kyc/          Claude KYC HTTP client
-internal/proxy/        HTTP/SOCKS proxy implementation
-internal/update/       GitHub release update engine
-extension/             Manifest V3 browser extension
-packaging/             Installer and user quick-start files
-scripts/               Build and icon scripts
-keys/                  Public extension key and stable ID
-docs/                  Architecture and release documentation
+extension/
+  manifest.json       Manifest V3 entry
+  app.html            Full-page extension UI
+  app.js              UI controller
+  background.js       Proxy auth and request orchestration
+  lib/
+    api.js            Claude request flow
+    kyc.js            Parsing, status, validation
+    proxy.js          Proxy parsing and PAC generation
+    release.js        GitHub update check
+package.json           Node test scripts
+tests/                 Node tests
+docs/                 Screenshot, architecture, release notes
+.github/workflows/    Tag-driven release automation
 ```
 
 ## Limitations
 
-- Windows only. macOS and Linux installers are not provided yet.
-- Claude endpoints used by this project are web endpoints and may change without notice.
-- A browser challenge or rate limit is reported as an error, never as a successful KYC result.
-- The tool queries status and returns the official vendor link; it does not automate or bypass identity verification.
+- The project uses Claude web endpoints that may change without notice.
+- Proxying applies to `claude.ai` only and is temporary, but other `claude.ai` tabs are briefly affected while a query runs.
+- A browser challenge, rate limit, or invalid session is reported as an error and never as a successful KYC result.
+- This tool queries status and returns the official verification link. It does not bypass identity verification.
+
+## Release automation
+
+The release workflow validates that the tag matches `extension/manifest.json`, runs the tests, creates `claude-kyc-extension-vX.Y.Z.zip`, creates `SHA256SUMS.txt`, and publishes the GitHub Release.
+
+```sh
+git tag -a v1.0.0 -m "v1.0.0"
+git push origin v1.0.0
+```
+
+See [docs/RELEASE.md](docs/RELEASE.md).
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Please do not open public issues for active security vulnerabilities; use [SECURITY.md](SECURITY.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md). Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
 
 ## License
 

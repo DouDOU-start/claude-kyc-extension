@@ -1,6 +1,0 @@
-{
-  "githubRepository": "DouDOU-start/claude-kyc-extension",
-  "nativeHostName": "com.claude.kyc",
-  "installFolder": "ClaudeKYC",
-  "packageBaseName": "claude-kyc-extension"
-}

@@ -1,6 +1,6 @@
 # Claude KYC 浏览器扩展
 
-在 Windows 上的 Chromium 浏览器中，用 Claude 网页 SK 和代理查询账号 KYC 状态。
+纯 Manifest V3 扩展，用 Claude 网页 SK 和可选代理查询账号 KYC 状态。不需要安装器、本机程序、Go 运行时或本地端口。
 
 [English](README.md)
 
@@ -10,77 +10,43 @@
 
 ## 功能
 
-- 无需创建内部账号，直接查询 Claude KYC 状态。
-- 组织 ID 可选；不填时通过 SK 自动读取组织列表。
-- 可明确刷新验证链接、重新验证，不会自动轮询或自动提交。
+- 纯扩展，无安装器、无 Native Messaging、无本地服务。
+- 下载或克隆后直接加载文件夹。
+- 组织 ID 可选；不填时自动读取组织列表。
+- 刷新验证链接、重新验证均需手动触发。
 - 验证链接仅接受 HTTPS，约 60 秒后失效。
-- 通过本机 Go 查询器保留 Chrome TLS/HTTP 指纹能力。
 - 支持 HTTP、HTTPS、SOCKS5、SOCKS5H 代理及认证。
 - 支持 `{session}`、`{region}` 动态代理模板。
-- 每天自动检查 GitHub Releases，下载后校验 SHA-256。
-- 无项目服务器、无遥测、无统计。
-
-## 为什么需要本机组件
-
-普通 Manifest V3 扩展无法稳定复现 Claude 需要的 Chrome 指纹，也无法可靠处理所有带认证的代理。扩展通过 Chrome Native Messaging 调用一个按需启动的本地查询器；查询器不开放端口，不保存 SK。
+- 自动检查 GitHub Releases 版本更新。
+- 无项目后端、无遥测、无统计。
 
 ## 系统要求
 
-- Windows 10/11
-- Chrome、Edge、Brave 等支持 Native Messaging 的 Chromium 浏览器
+- Chrome 148+ 或同代 Chromium 浏览器
 - Claude 网页 `sessionKey`，不是 Anthropic API Key
 - 代理可选
 
-## 从 GitHub 安装
+代理认证使用 Chrome 148+ 的 `webRequestAuthProvider` 权限。
+
+## 安装
 
 1. 打开 [Releases](https://github.com/DouDOU-start/claude-kyc-extension/releases)。
 2. 下载最新的 `claude-kyc-extension-vX.Y.Z.zip`。
-3. 解压整个安装包。
-4. 双击 `安装.cmd`。
-5. 打开 `chrome://extensions` 或 `edge://extensions`。
-6. 开启“开发者模式”。
-7. 点击“加载已解压的扩展程序”，选择：
+3. 解压 ZIP。
+4. 打开 `chrome://extensions` 或 `edge://extensions`。
+5. 开启“开发者模式”。
+6. 点击“加载已解压的扩展程序”，选择解压后的文件夹。
 
-   ```text
-   %LOCALAPPDATA%\ClaudeKYC\extension
-   ```
+所选文件夹内必须直接包含 `manifest.json`。从源码使用则选择本仓库的 `extension` 文件夹。
 
-不要选择上一级 `%LOCALAPPDATA%\ClaudeKYC`。Chrome 要求 `manifest.json` 直接位于所选目录。
-
-Chrome 不允许普通 sideload 扩展静默安装自己，所以首次需要以上步骤。之后的新版本由安装包内的更新器自动检查和安装。
-
-## 发布到 GitHub
-
-项目默认配置对应一个公开仓库：
-
-```text
-https://github.com/DouDOU-start/claude-kyc-extension
-```
-
-请创建这个公开仓库并推送本项目；如果使用其他仓库名，请同时修改 `project.json` 和 `extension/manifest.template.json` 后重新构建。自动更新使用未认证的 GitHub API，仓库必须公开。
-
-创建与扩展版本一致的 Release 标签：
-
-```powershell
-git tag -a v1.0.0 -m "v1.0.0"
-git push origin v1.0.0
-```
-
-仓库内的 Release Workflow 会自动上传 ZIP 和 `SHA256SUMS.txt`。详见 [docs/RELEASE.md](docs/RELEASE.md)。
-
-推送 `v1.0.1` 这样的标签后，GitHub Actions 会自动：
-
-- 运行全部测试；
-- 在 `windows-latest` 上构建查询器、更新器和扩展包；
-- 创建 GitHub Release；
-- 上传更新 ZIP 和 SHA-256 校验文件。
+Chrome 不能直接把 ZIP 拖进扩展页安装；先解压，再选择文件夹。整个项目没有安装程序。
 
 ## 使用
 
 1. 点击工具栏中的 Claude KYC。
-2. 填写代理，留空则直连。
+2. 填写代理；留空则使用浏览器当前网络。
 3. 填写 Claude 网页 SK。
-4. 可填写组织 ID；留空时自动读取组织。
+4. 可填写组织 ID；留空则自动读取组织。
 5. 点击“查询 KYC”。
 6. 点击“获取验证链接”取得 Persona 官方验证地址。
 7. 在浏览器中完成验证后，回到扩展点击“刷新状态”。
@@ -96,97 +62,104 @@ socks5h://主机:端口
 主机:端口:用户名:密码
 ```
 
-代理可包含 `{session}` 和 `{region}`，每次请求自动替换。
+扩展通过临时 PAC 只把 `claude.ai` 路由到代理。请求结束后会恢复浏览器代理设置；如果后台被中断，还会由清理定时器兜底。
 
-## 自动更新
+## 实现方式
 
-扩展从安装器目录加载后：
+- 使用 `declarativeNetRequest` 为该次请求注入 `Cookie: sessionKey=...`。
+- 不读取、不覆盖你现有的 Claude Cookie。
+- 代理认证由 `chrome.webRequest.onAuthRequired` 提供给浏览器，只在请求期间保存在会话存储。
+- 请求在扩展后台 Service Worker 中使用 Chromium 自身网络栈完成。
 
-1. 每天最多自动查询一次 GitHub 最新 Release。
-2. 有新版本时显示更新提示。
-3. 点击一次即可下载、校验 SHA-256、更新扩展和本机查询器，并重新加载扩展。
+## 更新
 
-更新器只接受配置仓库中的 Release 资产：
+推送 `v*` 标签时，GitHub Actions 会自动打包并发布 Release。
 
-- `claude-kyc-extension-vX.Y.Z.zip`
-- `SHA256SUMS.txt`
+从 GitHub 侧载安装的扩展每天最多检查一次新版本，并在有新版本时显示下载按钮。Chrome 不允许普通侧载扩展静默替换自身文件。下载新 ZIP 覆盖旧目录后，在扩展卡片上点击“重新加载”即可。
 
-SK 和代理不会发送到 GitHub。
+如果上架 Chrome Web Store，扩展本体可由商店自动更新。
 
-### 关于 Chrome Web Store
+## 权限
 
-如果上架 Chrome Web Store，首次安装可以做到一键完成，扩展本体也能由商店自动更新。但本机查询器仍需要 Windows 安装器。当前 GitHub Release 包是完整、自包含的发布方式。
-
-权限和打包说明见 [docs/CHROME_WEB_STORE.md](docs/CHROME_WEB_STORE.md)。
+| 权限 | 用途 |
+| --- | --- |
+| `proxy` | 查询期间临时将 `claude.ai` 路由到代理 |
+| `webRequest` + `webRequestAuthProvider` | 提供可选代理认证 |
+| `declarativeNetRequestWithHostAccess` | 为单次请求注入 SK，不修改浏览器 Cookie |
+| `storage` | 保存代理及请求期间的临时认证信息 |
+| `clipboardWrite` | 复制验证链接 |
+| `host_permissions` | 访问 `claude.ai` 和 GitHub Releases API |
 
 ## 隐私与安全
 
 - SK 只保存在当前扩展页面的 `sessionStorage`，关闭标签页即清除。
 - 代理地址保存在扩展本地存储。
-- SK 仅通过所选代理发送给 `claude.ai`。
-- 本机查询器不持久化 SK 或代理。
-- 无后端、无遥测、无统计。
+- 无项目服务器。
+- SK 和代理不会发送到 GitHub。
 - 验证链接仅接受 HTTPS，不自动打开。
 
 详见 [PRIVACY.md](PRIVACY.md) 和 [SECURITY.md](SECURITY.md)。
 
-## 从源码构建
+## 开发
 
-需要：
+没有构建步骤。直接在扩展管理页加载 `extension` 文件夹。
 
-- Go 1.27+
-- Node.js 20+
-- Windows PowerShell 5.1 或 PowerShell 7
+测试：
 
-```powershell
-git clone https://github.com/DouDOU-start/claude-kyc-extension.git
-cd claude-kyc-extension
-powershell -ExecutionPolicy Bypass -File .\scripts\build.ps1
-```
-
-输出：
-
-```text
-dist\ClaudeKYC\
-dist\claude-kyc-extension-v1.0.0.zip
-dist\SHA256SUMS.txt
-```
-
-## 测试
-
-```powershell
-cd extension
+```sh
 node --test tests/*.test.js
-cd ..
-go test ./...
-go vet ./...
+```
+
+语法检查：
+
+```sh
+node --check extension/app.js
+node --check extension/background.js
+node --check extension/lib/api.js
+node --check extension/lib/proxy.js
+node --check extension/lib/release.js
 ```
 
 ## 目录结构
 
 ```text
-cmd/kyc-host/          Native Messaging 查询器
-cmd/kyc-updater/       进程退出后的文件更新器
-internal/kyc/          Claude KYC HTTP 客户端
-internal/proxy/        HTTP/SOCKS 代理
-internal/update/       GitHub Release 更新逻辑
-extension/             Manifest V3 扩展
-packaging/             安装器和快速说明
-scripts/               构建与图标脚本
-keys/                  扩展公钥和固定 ID
-docs/                  架构与发布文档
+extension/
+  manifest.json       Manifest V3
+  app.html            扩展页面
+  app.js              界面逻辑
+  background.js       代理认证与请求编排
+  lib/
+    api.js            Claude 请求流程
+    kyc.js            解析、状态、校验
+    proxy.js          代理解析与 PAC
+    release.js        GitHub 更新检查
+package.json           Node 测试脚本
+tests/                 Node 测试
+docs/                 截图、架构、发布说明
+.github/workflows/    标签自动发布
 ```
 
 ## 限制
 
-- 仅提供 Windows 安装器。
-- 使用的是 Claude 网页接口，接口变化可能导致功能失效。
+- 使用 Claude 网页接口，接口变化可能导致失效。
+- 代理只作用于 `claude.ai` 且是临时的，但查询期间其他 `claude.ai` 标签可能短暂受影响。
 - 浏览器验证、限流、401/403 会显示为错误，不会误报为验证成功。
-- 本工具只查询状态并提供官方验证链接，不自动完成或绕过实名验证。
+- 本工具只查询状态并提供官方验证链接，不绕过实名验证。
+
+## 自动发布
+
+Release Workflow 会校验标签与 `extension/manifest.json` 版本一致，运行测试，生成 `claude-kyc-extension-vX.Y.Z.zip` 和 `SHA256SUMS.txt`，然后发布 GitHub Release。
+
+```sh
+git tag -a v1.0.0 -m "v1.0.0"
+git push origin v1.0.0
+```
+
+详见 [docs/RELEASE.md](docs/RELEASE.md)。
 
 ## 贡献
 
-请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。安全漏洞请按 [SECURITY.md](SECURITY.md) 私下报告。
+请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。安全漏洞按 [SECURITY.md](SECURITY.md) 私下报告。
 
 ## 许可证
 

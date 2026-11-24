@@ -3,9 +3,9 @@
 ## 1.0.0
 
 - Initial open-source release.
-- Windows native helper and Manifest V3 extension.
+- Pure Manifest V3 extension with no installer or native helper.
 - Session-key KYC lookup with optional organization ID.
-- HTTP/HTTPS/SOCKS5/SOCKS5H proxy support.
-- Explicit verification-link and retry actions.
-- GitHub Release update checks with SHA-256 verification.
-- One-click Go helper and extension updates.
+- Temporary HTTP/HTTPS/SOCKS5/SOCKS5H proxy routing.
+- Authenticated proxy support through `webRequestAuthProvider`.
+- Request-scoped cookie injection without touching browser cookies.
+- GitHub Release update notifications.

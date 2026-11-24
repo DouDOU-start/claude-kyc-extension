@@ -2,26 +2,26 @@ import {
   KYC_LINK_MS,
   actionOptions,
   formatTime,
-  hostErrorMessage,
   isComplete,
   isFailed,
   linkSeconds,
   mergeKYC,
   normalizeOrganizationID,
-  normalizeProxy,
   normalizeSessionKey,
   statusLabel,
   statusTone,
   vendorURL,
 } from "./lib/kyc.js";
+import { parseProxy } from "./lib/proxy.js";
+import { RELEASES_URL, checkLatestRelease } from "./lib/release.js";
 
-const HOST_NAME = "com.claude.kyc";
 const PROXY_STORAGE = "claude-kyc.proxy";
 const SESSION_STORAGE = "claude-kyc.session-key";
 const ORGANIZATION_STORAGE = "claude-kyc.organization-id";
 const UPDATE_CHECK_STORAGE = "claude-kyc.last-update-check";
 const UPDATE_CHECK_INTERVAL = 24 * 60 * 60 * 1000;
 const SECRET_TYPE = ["pass", "word"].join("");
+const currentVersion = chrome.runtime.getManifest().version;
 
 const elements = {
   form: document.querySelector("#query-form"),
@@ -35,7 +35,6 @@ const elements = {
   notice: document.querySelector("#notice"),
   noticeTitle: document.querySelector("#notice-title"),
   noticeMessage: document.querySelector("#notice-message"),
-  hostHelp: document.querySelector("#host-help"),
   organizationField: document.querySelector("#organization-field"),
   organization: document.querySelector("#organization"),
   result: document.querySelector("#result"),
@@ -68,19 +67,18 @@ const state = {
   checkedAt: "",
   linkExpiresAt: 0,
   busy: false,
-  hostMissing: false,
-  managed: false,
-  updateVersion: "",
-  updating: false,
+  checkingUpdate: false,
+  releaseUrl: "",
 };
 
 let toastTimer;
 let linkTimer;
 
-class HostError extends Error {
-  constructor(code, message) {
+class UIError extends Error {
+  constructor(code, message, status = 0) {
     super(message);
     this.code = code;
+    this.status = status;
   }
 }
 
@@ -102,63 +100,36 @@ function rememberInputs() {
   } catch {}
 }
 
-function requestID() {
-  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
-  const bytes = crypto.getRandomValues(new Uint8Array(16));
-  return [...bytes].map((value) => value.toString(16).padStart(2, "0")).join("");
-}
-
-function invoke(message, timeoutMs = 55_000) {
+function sendRequest(action, extra = {}) {
   return new Promise((resolve, reject) => {
-    let port;
-    try {
-      port = chrome.runtime.connectNative(HOST_NAME);
-    } catch (error) {
-      reject(new HostError("host_missing", error?.message || ""));
-      return;
-    }
-
-    let settled = false;
-    const finish = (callback) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      callback();
-      try {
-        port.disconnect();
-      } catch {}
-    };
-    const timeout = setTimeout(() => {
-      finish(() => reject(new HostError("timeout", "")));
-    }, timeoutMs);
-
-    port.onMessage.addListener((reply) => {
-      if (reply?.id !== message.id) return;
-      finish(() => {
-        if (reply.ok) {
-          resolve(reply.data || {});
+    chrome.runtime.sendMessage(
+      {
+        type: "claude-kyc",
+        action,
+        sessionKey: state.sessionKey,
+        proxy: state.proxy,
+        ...extra,
+      },
+      (response) => {
+        if (chrome.runtime.lastError) {
+          reject(new UIError("runtime", "扩展后台没有响应，请重新打开扩展。"));
           return;
         }
-        reject(new HostError(reply.error?.code || "query_failed", reply.error?.message || ""));
-      });
-    });
-
-    port.onDisconnect.addListener(() => {
-      const reason = chrome.runtime.lastError?.message || "";
-      finish(() => {
-        if (/native messaging host|not found|forbidden/i.test(reason)) {
-          reject(new HostError("host_missing", reason));
-        } else {
-          reject(new HostError("host_disconnected", reason));
+        if (!response) {
+          reject(new UIError("runtime", "扩展后台没有返回结果，请重试。"));
+          return;
         }
-      });
-    });
-
-    try {
-      port.postMessage(message);
-    } catch (error) {
-      finish(() => reject(new HostError("host_disconnected", error?.message || "")));
-    }
+        if (!response.ok) {
+          reject(new UIError(
+            response.error?.code || "query_failed",
+            response.error?.message || "查询失败，请稍后重试。",
+            response.error?.status || 0,
+          ));
+          return;
+        }
+        resolve(response.data);
+      },
+    );
   });
 }
 
@@ -173,11 +144,7 @@ function setBusy(busy) {
   for (const button of [elements.refreshStatus, elements.refreshLink, elements.retry, elements.copyLink]) {
     button.disabled = busy;
   }
-  if (busy) {
-    elements.localBadge.textContent = "查询中";
-  } else {
-    elements.localBadge.textContent = state.hostMissing ? "组件未连接" : "本机查询";
-  }
+  elements.localBadge.textContent = busy ? "请求中" : "扩展内查询";
   updateQueryLabel();
 }
 
@@ -208,23 +175,14 @@ function resetQueryState() {
   updateQueryLabel();
 }
 
-function showError(problem) {
-  const missing = problem.code === "host_missing";
-  const updateProblem = String(problem.code).startsWith("update_");
-  elements.noticeTitle.textContent = missing ? "本地查询组件未安装" : updateProblem ? "更新失败" : "查询失败";
-  elements.noticeMessage.textContent = hostErrorMessage(problem.code, problem.message);
+function showError(error, title = "查询失败") {
+  elements.noticeTitle.textContent = title;
+  elements.noticeMessage.textContent = error?.message || "查询失败，请稍后重试。";
   elements.notice.hidden = false;
-  elements.hostHelp.hidden = !missing;
-  if (missing) {
-    state.hostMissing = true;
-    elements.localBadge.textContent = "组件未连接";
-    elements.localBadge.dataset.state = "error";
-  }
 }
 
 function hideError() {
   elements.notice.hidden = true;
-  elements.hostHelp.hidden = true;
 }
 
 function renderOrganizations() {
@@ -301,43 +259,24 @@ function stopLinkTimer() {
 }
 
 async function discoverOrganizations() {
-  const data = await invoke({
-    id: requestID(),
-    method: "organizations",
-    sessionKey: state.sessionKey,
-    proxy: state.proxy,
-  });
-  state.organizations = Array.isArray(data.organizations) ? data.organizations : [];
-  state.hostMissing = false;
-  delete elements.localBadge.dataset.state;
-  if (state.organizations.length === 1) {
-    state.orgId = state.organizations[0].id;
-  } else {
-    state.orgId = "";
-  }
+  const organizations = await sendRequest("organizations");
+  state.organizations = Array.isArray(organizations) ? organizations : [];
+  state.orgId = state.organizations.length === 1 ? state.organizations[0].id : "";
   renderOrganizations();
 }
 
 async function runAction(action) {
-  const options = actionOptions(action);
   hideError();
   setBusy(true);
   try {
-    const data = await invoke({
-      id: requestID(),
-      method: "query",
-      sessionKey: state.sessionKey,
-      proxy: state.proxy,
+    const options = actionOptions(action);
+    const data = await sendRequest("query", {
       orgId: state.orgId,
       ...options,
     });
     const next = {
-      status: data.status,
-      should_poll: Boolean(data.should_poll),
-      updated_at: data.updated_at,
-      completed_at: data.completed_at,
-      vendor_inquiry_url: data.vendor_inquiry_url,
-      checked_at: data.checkedAt,
+      ...data,
+      checked_at: new Date().toISOString(),
     };
     const merged = mergeKYC(state.result, next);
     if (merged.ignored) {
@@ -345,14 +284,12 @@ async function runAction(action) {
       return;
     }
     state.result = merged.result;
-    state.checkedAt = data.checkedAt || "";
+    state.checkedAt = next.checked_at;
     state.linkExpiresAt = state.result.vendor_inquiry_url ? Date.now() + KYC_LINK_MS : 0;
-    state.hostMissing = false;
-    delete elements.localBadge.dataset.state;
     stopLinkTimer();
     renderResult();
   } catch (error) {
-    showError(error instanceof HostError ? error : new HostError("query_failed", ""));
+    showError(error instanceof UIError ? error : new UIError("query_failed", ""));
   } finally {
     setBusy(false);
     renderLinkExpiry();
@@ -361,32 +298,34 @@ async function runAction(action) {
 
 async function submitQuery(event) {
   event.preventDefault();
-  if (state.busy || state.updating) return;
+  if (state.busy) return;
   const key = normalizeSessionKey(elements.sk.value);
   if (!key.ok) {
-    showError(new HostError("invalid_session", key.error));
+    showError(new UIError("invalid_session", key.error));
     elements.sk.focus();
     return;
   }
-  const proxy = normalizeProxy(elements.proxy.value);
+  const proxy = parseProxy(elements.proxy.value);
   if (!proxy.ok) {
-    showError(new HostError("invalid_proxy", proxy.error));
+    showError(new UIError("invalid_proxy", proxy.error));
     elements.proxy.focus();
     return;
   }
   const organization = normalizeOrganizationID(elements.orgId.value);
   if (!organization.ok) {
-    showError(new HostError("invalid_organization", organization.error));
+    showError(new UIError("invalid_organization", organization.error));
     elements.orgId.focus();
     return;
   }
-  if (proxy.value !== state.proxy || key.value !== state.sessionKey || organization.value !== state.orgInput) {
+  if (elements.proxy.value.trim() !== state.proxy || key.value !== state.sessionKey ||
+    organization.value !== state.orgInput) {
     resetQueryState();
   }
   state.sessionKey = key.value;
-  state.proxy = proxy.value;
+  state.proxy = elements.proxy.value.trim();
   state.orgInput = organization.value;
   hideError();
+
   if (state.orgInput) {
     state.organizations = [];
     state.orgId = state.orgInput;
@@ -394,12 +333,13 @@ async function submitQuery(event) {
     await runAction("status");
     return;
   }
+
   if (state.organizations.length === 0) {
     setBusy(true);
     try {
       await discoverOrganizations();
     } catch (error) {
-      showError(error instanceof HostError ? error : new HostError("organizations_failed", ""));
+      showError(error instanceof UIError ? error : new UIError("organizations_failed", ""));
       return;
     } finally {
       setBusy(false);
@@ -410,7 +350,7 @@ async function submitQuery(event) {
     }
   }
   if (!state.orgId) {
-    showError(new HostError("invalid_organization", "请选择 Claude 组织。"));
+    showError(new UIError("invalid_organization", "请选择 Claude 组织。"));
     elements.organization.focus();
     return;
   }
@@ -445,41 +385,25 @@ function toast(message) {
 }
 
 async function copyVendorLink() {
-  const url = elements.vendorLink.textContent;
-  if (await copyText(url)) toast("链接已复制");
-}
-
-async function readInstallationMarker() {
-  try {
-    const response = await fetch(chrome.runtime.getURL("installation.json"), { cache: "no-store" });
-    if (!response.ok) return false;
-    const marker = await response.json();
-    return marker?.managed === true;
-  } catch {
-    return false;
-  }
-}
-
-function showUpdateBanner(update) {
-  state.updateVersion = update.latestVersion;
-  elements.updateTitle.textContent = `发现新版本 v${update.latestVersion}`;
-  elements.updateNotes.textContent = update.notes || "更新包含兼容性修复与功能改进。";
-  elements.updateButton.textContent = `更新到 v${update.latestVersion}`;
-  elements.updateButton.disabled = false;
-  elements.updateBanner.hidden = false;
+  if (await copyText(elements.vendorLink.textContent)) toast("链接已复制");
 }
 
 function hideUpdateBanner() {
-  state.updateVersion = "";
+  state.releaseUrl = "";
   elements.updateBanner.hidden = true;
 }
 
+function showUpdateBanner(update) {
+  state.releaseUrl = update.downloadUrl || update.releaseUrl || RELEASES_URL;
+  elements.updateTitle.textContent = `发现新版本 v${update.latestVersion}`;
+  elements.updateNotes.textContent = update.notes || "新版本已发布，下载后解压并重新加载扩展。";
+  elements.updateButton.textContent = "下载更新";
+  elements.updateBanner.hidden = false;
+}
+
 async function checkForUpdates(manual) {
-  if (state.updating) return;
-  if (!state.managed) {
-    if (manual) toast("请从安装目录加载扩展后再使用自动更新");
-    return;
-  }
+  if (state.checkingUpdate) return;
+  state.checkingUpdate = true;
   const previousLabel = elements.checkUpdate.textContent;
   elements.checkUpdate.disabled = true;
   elements.checkUpdate.textContent = "检查中…";
@@ -487,51 +411,19 @@ async function checkForUpdates(manual) {
     localStorage.setItem(UPDATE_CHECK_STORAGE, String(Date.now()));
   } catch {}
   try {
-    const update = await invoke({ id: requestID(), method: "checkUpdate" }, 30_000);
-    if (!update.managed) {
-      if (manual) toast(update.reason || "当前版本不支持自动更新");
-      return;
-    }
+    const update = await checkLatestRelease(currentVersion);
     if (update.available) {
       showUpdateBanner(update);
     } else {
       hideUpdateBanner();
-      if (manual) toast("当前已是最新版本");
+      if (manual) toast(update.noRelease ? "还没有发布版本" : "当前已是最新版本");
     }
-  } catch (error) {
-    if (manual) {
-      showError(error instanceof HostError ? error : new HostError("update_check_failed", ""));
-    }
+  } catch {
+    if (manual) toast("检查更新失败，请稍后重试");
   } finally {
+    state.checkingUpdate = false;
     elements.checkUpdate.disabled = false;
     elements.checkUpdate.textContent = previousLabel;
-  }
-}
-
-async function installUpdate() {
-  if (!state.updateVersion || state.updating) return;
-  const version = state.updateVersion;
-  state.updating = true;
-  elements.updateButton.disabled = true;
-  elements.updateButton.textContent = "下载中…";
-  elements.queryButton.disabled = true;
-  hideError();
-  try {
-    await invoke({ id: requestID(), method: "prepareUpdate", version }, 310_000);
-    elements.updateButton.textContent = "应用中…";
-    await invoke({ id: requestID(), method: "applyUpdate", version }, 60_000);
-    elements.updateButton.textContent = "正在重载…";
-    elements.updateNotes.textContent = "更新已应用，正在重新加载扩展。";
-    toast("更新完成");
-    setTimeout(() => {
-      chrome.runtime.reload();
-    }, 1800);
-  } catch (error) {
-    state.updating = false;
-    elements.updateButton.disabled = false;
-    elements.updateButton.textContent = `更新到 v${version}`;
-    updateQueryLabel();
-    showError(error instanceof HostError ? error : new HostError("update_apply_failed", ""));
   }
 }
 
@@ -588,46 +480,26 @@ elements.organization.addEventListener("change", () => {
   updateQueryLabel();
 });
 
-elements.refreshStatus.addEventListener("click", () => {
-  void runAction("status");
-});
-
-elements.refreshLink.addEventListener("click", () => {
-  void runAction("refresh");
-});
-
-elements.retry.addEventListener("click", () => {
-  void runAction("retry");
-});
-
-elements.vendorLink.addEventListener("click", () => {
-  void copyVendorLink();
-});
-
-elements.copyLink.addEventListener("click", () => {
-  void copyVendorLink();
-});
-
-elements.checkUpdate.addEventListener("click", () => {
-  void checkForUpdates(true);
-});
-
+elements.refreshStatus.addEventListener("click", () => void runAction("status"));
+elements.refreshLink.addEventListener("click", () => void runAction("refresh"));
+elements.retry.addEventListener("click", () => void runAction("retry"));
+elements.vendorLink.addEventListener("click", () => void copyVendorLink());
+elements.copyLink.addEventListener("click", () => void copyVendorLink());
+elements.checkUpdate.addEventListener("click", () => void checkForUpdates(true));
 elements.updateButton.addEventListener("click", () => {
-  void installUpdate();
+  if (state.releaseUrl) void chrome.tabs.create({ url: state.releaseUrl });
 });
 
 restoreInputs();
 elements.sk.type = SECRET_TYPE;
+elements.extensionVersion.textContent = currentVersion;
+elements.localBadge.textContent = "扩展内查询";
 updateQueryLabel();
-elements.extensionVersion.textContent = chrome.runtime.getManifest().version;
-void readInstallationMarker().then((managed) => {
-  state.managed = managed;
-  if (!managed) return;
-  let lastCheck = 0;
-  try {
-    lastCheck = Number(localStorage.getItem(UPDATE_CHECK_STORAGE)) || 0;
-  } catch {}
-  if (Date.now() - lastCheck >= UPDATE_CHECK_INTERVAL) {
-    void checkForUpdates(false);
-  }
-});
+
+let lastCheck = 0;
+try {
+  lastCheck = Number(localStorage.getItem(UPDATE_CHECK_STORAGE)) || 0;
+} catch {}
+if (Date.now() - lastCheck >= UPDATE_CHECK_INTERVAL) {
+  void checkForUpdates(false);
+}

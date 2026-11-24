@@ -4,28 +4,29 @@
 
 Only the latest GitHub Release is supported with security fixes.
 
-## Reporting a vulnerability
+## Reporting
 
-Please use GitHub's private vulnerability reporting or a private security advisory for this repository. Do not open a public issue containing:
+Please use GitHub private vulnerability reporting or a private security advisory. Do not open a public issue containing:
 
 - a Claude session key
 - proxy credentials
-- a verification URL containing an inquiry token
-- details that make an active vulnerability immediately exploitable
+- a Persona inquiry URL or token
+- steps that make an active vulnerability immediately exploitable
 
-Please include the affected version, reproduction steps, impact, and any suggested mitigation.
+Include the affected version, reproduction steps, impact, and suggested mitigation.
 
-## Sensitive data
+## Sensitive values
 
 - The Claude web `sessionKey` is equivalent to an active browser session. Treat it as a highly sensitive credential.
 - Proxy URLs may contain credentials.
 - Persona verification URLs may contain inquiry tokens.
-- Do not include these values in issues, logs, screenshots, or pull requests.
+
+The extension keeps the session key in `sessionStorage`, injects it only into request-scoped headers, and clears temporary proxy credentials after each request. It does not read or modify existing Claude cookies.
 
 ## Update trust
 
-The updater is pinned to the repository configured at build time. It downloads only that repository's release asset and verifies the SHA-256 value published by GitHub Releases or in `SHA256SUMS.txt`. A compromise of the GitHub repository or maintainer account can still compromise future updates. Maintainers should use strong account security, review changes, and avoid bypassing the release workflow.
+The extension checks the pinned public GitHub repository for the latest release and opens the release page when an update is available. It cannot silently self-update a sideloaded extension. Chrome Web Store distribution should be used when automatic updates are required.
 
 ## Scope
 
-The project does not bypass KYC, CAPTCHAs, browser challenges, account access controls, or payment controls. Reports about those behaviors are outside the intended scope.
+The project does not bypass KYC, CAPTCHA, browser challenges, access controls, or payment controls.

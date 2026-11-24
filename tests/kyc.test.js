@@ -4,19 +4,19 @@ import test from "node:test";
 import {
   actionOptions,
   formatTime,
-  hostErrorMessage,
   isComplete,
   isFailed,
   KYC_LINK_MS,
   linkSeconds,
   mergeKYC,
-  normalizeProxy,
   normalizeOrganizationID,
   normalizeSessionKey,
+  parseKYCStatus,
+  parseOrganizations,
   statusLabel,
   statusTone,
   vendorURL,
-} from "../lib/kyc.js";
+} from "../extension/lib/kyc.js";
 
 test("status labels and tones keep unknown values incomplete", () => {
   assert.equal(statusLabel("verified"), "已验证");
@@ -38,15 +38,6 @@ test("session key accepts Claude web values and rejects header injection", () =>
   assert.equal(normalizeSessionKey("value\nnext").ok, false);
   assert.equal(normalizeSessionKey("value;other").ok, false);
   assert.equal(normalizeSessionKey("value\\other").ok, false);
-});
-
-test("proxy validation permits vendor formats and blocks line breaks", () => {
-  assert.deepEqual(normalizeProxy(" host:8080:user:demo "), {
-    ok: true,
-    value: "host:8080:user:demo",
-  });
-  assert.equal(normalizeProxy("").ok, true);
-  assert.equal(normalizeProxy("host:8080\r\nX-Test: 1").ok, false);
 });
 
 test("organization IDs are optional and reject whitespace", () => {
@@ -97,7 +88,36 @@ test("link countdown and local formatting are stable", () => {
   assert.match(formatTime("2026-11-20T10:00:00Z"), /2026/);
 });
 
-test("host errors are translated without leaking raw values", () => {
-  assert.match(hostErrorMessage("host_missing"), /install\.ps1/);
-  assert.equal(hostErrorMessage("unknown", "friendly"), "friendly");
+test("organization responses are validated and deduplicated", () => {
+  const parsed = parseOrganizations(`[
+    {"uuid":"org-one","name":"Personal"},
+    {"uuid":"org-two","name":"Team"},
+    {"uuid":"org-one","name":"Duplicate"}
+  ]`);
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.value.length, 2);
+  assert.equal(parsed.value[1].name, "Team");
+  assert.equal(parseOrganizations(`{"uuid":"org"}`).ok, false);
+  assert.equal(parseOrganizations(`[{"uuid":"has spaces"}]`).ok, false);
+});
+
+test("KYC responses reject unknown malformed payloads", () => {
+  const pending = parseKYCStatus(`{
+    "status":"pending",
+    "should_poll":true,
+    "vendor_inquiry_url":"https://inquiry.withpersona.com/verify?inquiry-id=one"
+  }`);
+  assert.equal(pending.ok, true);
+  assert.equal(pending.value.should_poll, true);
+
+  const complete = parseKYCStatus(`{
+    "status":"verified",
+    "should_poll":true,
+    "vendor_inquiry_url":"https://inquiry.withpersona.com/verify?inquiry-id=one"
+  }`);
+  assert.equal(complete.value.should_poll, false);
+  assert.equal(complete.value.vendor_inquiry_url, "");
+  assert.equal(parseKYCStatus(`{"status":""}`).ok, false);
+  assert.equal(parseKYCStatus(`{"status":"pending","should_poll":"true"}`).ok, false);
+  assert.equal(parseKYCStatus(`<html></html>`).ok, false);
 });
