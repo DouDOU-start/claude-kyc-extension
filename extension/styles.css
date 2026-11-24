@@ -433,6 +433,15 @@ button.secondary:hover:not(:disabled) {
   font-size: 12px;
 }
 
+.footer-link {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.footer-link:hover {
+  color: var(--accent-strong);
+}
+
 body.is-busy .local-badge {
   color: var(--accent-strong);
   border-color: #e0b6a8;
