@@ -11,8 +11,9 @@
 ## 功能
 
 - 纯扩展，无安装器、无 Native Messaging、无本地服务。
+- 使用 Chrome 侧边栏，切换到 Persona 验证页面后仍保持打开。
 - 下载或克隆后直接加载文件夹。
-- 组织 ID 可选；不填时自动读取组织列表。
+- 自动从 SK 读取组织列表；存在多个组织时才需要选择。
 - 刷新验证链接、重新验证均需手动触发。
 - 验证链接仅接受 HTTPS，约 60 秒后失效。
 - 支持 HTTP、HTTPS、SOCKS5、SOCKS5H 代理及认证。
@@ -43,13 +44,12 @@ Chrome 不能直接把 ZIP 拖进扩展页安装；先解压，再选择文件�
 
 ## 使用
 
-1. 点击工具栏中的 Claude KYC。
+1. 点击工具栏中的 Claude KYC，打开侧边栏。
 2. 填写代理；留空则使用浏览器当前网络。
 3. 填写 Claude 网页 SK。
-4. 可填写组织 ID；留空则自动读取组织。
-5. 点击“查询 KYC”。
-6. 点击“获取验证链接”取得 Persona 官方验证地址。
-7. 在浏览器中完成验证后，回到扩展点击“刷新状态”。
+4. 点击“查询 KYC”。
+5. 点击“获取验证链接”取得 Persona 官方验证地址。
+6. 在浏览器中完成验证后，回到扩展点击“刷新状态”。
 
 ### 代理格式
 
@@ -86,13 +86,14 @@ socks5h://主机:端口
 | `proxy` | 查询期间临时将 `claude.ai` 路由到代理 |
 | `webRequest` + `webRequestAuthProvider` | 提供可选代理认证 |
 | `declarativeNetRequestWithHostAccess` | 为单次请求注入 SK，不修改浏览器 Cookie |
-| `storage` | 保存代理及请求期间的临时认证信息 |
+| `storage` | 保存浏览器会话 SK、代理及请求期间的临时认证信息 |
+| `sidePanel` | 在 Chrome 侧边栏中显示查询界面 |
 | `clipboardWrite` | 复制验证链接 |
 | `host_permissions` | 访问 `claude.ai` 和 GitHub Releases API |
 
 ## 隐私与安全
 
-- SK 只保存在当前扩展页面的 `sessionStorage`，关闭标签页即清除。
+- SK 保存在浏览器会话存储，关闭浏览器或点击“清空 SK”后清除。
 - 代理地址保存在扩展本地存储。
 - 无项目服务器。
 - SK 和代理不会发送到 GitHub。
@@ -125,7 +126,7 @@ node --check extension/lib/release.js
 ```text
 extension/
   manifest.json       Manifest V3
-  app.html            扩展页面
+  sidepanel.html      Chrome 侧边栏界面
   app.js              界面逻辑
   background.js       代理认证与请求编排
   lib/

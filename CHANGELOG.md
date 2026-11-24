@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.2
+
+- Remove the manual organization ID field; organizations are always discovered from the session key.
+- Add the GitHub icon to the footer link.
+- Move the interface from a standalone page to Chrome's side panel.
+- Keep the session key in browser session storage.
+
 ## 1.0.1
 
 - Add a persistent GitHub repository link in the extension footer.

@@ -2,9 +2,8 @@
 
 ## Local data
 
-- **Claude session key**: held in the extension page's `sessionStorage`; cleared when the tab closes. It is injected into a single Claude request and is not written to disk.
+- **Claude session key**: held in browser session storage; cleared when the browser session ends or the user clicks **清空 SK**. It is injected into a single Claude request and is not written to disk.
 - **Proxy URL**: stored in the extension's local browser storage for reuse. It may contain credentials.
-- **Organization ID**: held in the current tab's session storage.
 - **KYC result**: displayed in the page and not written to a database.
 
 ## Network requests

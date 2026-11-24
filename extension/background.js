@@ -7,13 +7,16 @@ import {
 import { normalizeOrganizationID, normalizeSessionKey } from "./lib/kyc.js";
 import { parseProxy } from "./lib/proxy.js";
 
-const appURL = chrome.runtime.getURL("app.html");
 const authStorageKey = "claudeKycProxyAuth";
 const secretField = ["pass", "word"].join("");
 const cleanupAlarm = "claude-kyc-cleanup";
 const claudeFilter = { urls: ["https://claude.ai/*"] };
 const attempted = new Set();
 let requestQueue = Promise.resolve();
+
+chrome.sidePanel
+  .setPanelBehavior({ openPanelOnActionClick: true })
+  .catch(() => {});
 
 try {
   chrome.webRequest.onAuthRequired.addListener(
@@ -85,7 +88,7 @@ async function handle(message) {
   if (message.action === "query") {
     const organization = normalizeOrganizationID(message.orgId);
     if (!organization.ok || !organization.value) {
-      throw new RequestError("invalid_organization", organization.error || "请选择或填写 Claude 组织 ID。");
+      throw new RequestError("invalid_organization", organization.error || "请选择 Claude 组织。");
     }
     const refreshSession = Boolean(message.refreshSession);
     const attemptRetry = Boolean(message.attemptRetry);
@@ -113,25 +116,4 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     .then((data) => sendResponse({ ok: true, data }))
     .catch((error) => sendResponse({ ok: false, error: serializedError(error) }));
   return true;
-});
-
-async function openApp() {
-  if (chrome.runtime.getContexts) {
-    try {
-      const contexts = await chrome.runtime.getContexts({
-        contextTypes: ["TAB"],
-        documentUrls: [appURL],
-      });
-      const current = contexts.find((context) => Number.isInteger(context.tabId) && context.tabId >= 0);
-      if (current) {
-        await chrome.tabs.update(current.tabId, { active: true });
-        return;
-      }
-    } catch {}
-  }
-  await chrome.tabs.create({ url: appURL });
-}
-
-chrome.action.onClicked.addListener(() => {
-  void openApp();
 });

@@ -6,7 +6,6 @@ import {
   isFailed,
   linkSeconds,
   mergeKYC,
-  normalizeOrganizationID,
   normalizeSessionKey,
   statusLabel,
   statusTone,
@@ -17,7 +16,6 @@ import { RELEASES_URL, checkLatestRelease } from "./lib/release.js";
 
 const PROXY_STORAGE = "claude-kyc.proxy";
 const SESSION_STORAGE = "claude-kyc.session-key";
-const ORGANIZATION_STORAGE = "claude-kyc.organization-id";
 const UPDATE_CHECK_STORAGE = "claude-kyc.last-update-check";
 const UPDATE_CHECK_INTERVAL = 24 * 60 * 60 * 1000;
 const SECRET_TYPE = ["pass", "word"].join("");
@@ -27,7 +25,6 @@ const elements = {
   form: document.querySelector("#query-form"),
   proxy: document.querySelector("#proxy"),
   sk: document.querySelector("#sk"),
-  orgId: document.querySelector("#org-id"),
   toggleSk: document.querySelector("#toggle-sk"),
   queryButton: document.querySelector("#query-button"),
   clearButton: document.querySelector("#clear-button"),
@@ -60,7 +57,6 @@ const elements = {
 const state = {
   sessionKey: "",
   proxy: "",
-  orgInput: "",
   organizations: [],
   orgId: "",
   result: null,
@@ -82,22 +78,23 @@ class UIError extends Error {
   }
 }
 
-function restoreInputs() {
+async function restoreInputs() {
   try {
     elements.proxy.value = localStorage.getItem(PROXY_STORAGE) || "";
   } catch {}
   try {
-    elements.sk.value = sessionStorage.getItem(SESSION_STORAGE) || "";
-    elements.orgId.value = sessionStorage.getItem(ORGANIZATION_STORAGE) || "";
+    const stored = await chrome.storage.session.get(SESSION_STORAGE);
+    if (typeof stored?.[SESSION_STORAGE] === "string") {
+      elements.sk.value = stored[SESSION_STORAGE];
+    }
   } catch {}
 }
 
 function rememberInputs() {
   try {
     localStorage.setItem(PROXY_STORAGE, elements.proxy.value);
-    sessionStorage.setItem(SESSION_STORAGE, elements.sk.value);
-    sessionStorage.setItem(ORGANIZATION_STORAGE, elements.orgId.value);
   } catch {}
+  void chrome.storage.session.set({ [SESSION_STORAGE]: elements.sk.value }).catch(() => {});
 }
 
 function sendRequest(action, extra = {}) {
@@ -138,7 +135,6 @@ function setBusy(busy) {
   document.body.classList.toggle("is-busy", busy);
   elements.proxy.disabled = busy;
   elements.sk.disabled = busy;
-  elements.orgId.disabled = busy;
   elements.clearButton.disabled = busy;
   elements.organization.disabled = busy;
   for (const button of [elements.refreshStatus, elements.refreshLink, elements.retry, elements.copyLink]) {
@@ -161,7 +157,6 @@ function updateQueryLabel() {
 function resetQueryState() {
   state.organizations = [];
   state.orgId = "";
-  state.orgInput = "";
   state.result = null;
   state.checkedAt = "";
   state.linkExpiresAt = 0;
@@ -311,28 +306,12 @@ async function submitQuery(event) {
     elements.proxy.focus();
     return;
   }
-  const organization = normalizeOrganizationID(elements.orgId.value);
-  if (!organization.ok) {
-    showError(new UIError("invalid_organization", organization.error));
-    elements.orgId.focus();
-    return;
-  }
-  if (elements.proxy.value.trim() !== state.proxy || key.value !== state.sessionKey ||
-    organization.value !== state.orgInput) {
+  if (elements.proxy.value.trim() !== state.proxy || key.value !== state.sessionKey) {
     resetQueryState();
   }
   state.sessionKey = key.value;
   state.proxy = elements.proxy.value.trim();
-  state.orgInput = organization.value;
   hideError();
-
-  if (state.orgInput) {
-    state.organizations = [];
-    state.orgId = state.orgInput;
-    renderOrganizations();
-    await runAction("status");
-    return;
-  }
 
   if (state.organizations.length === 0) {
     setBusy(true);
@@ -443,12 +422,6 @@ elements.sk.addEventListener("input", () => {
   hideError();
 });
 
-elements.orgId.addEventListener("input", () => {
-  rememberInputs();
-  resetQueryState();
-  hideError();
-});
-
 elements.toggleSk.addEventListener("click", () => {
   const visible = elements.sk.type === SECRET_TYPE;
   elements.sk.type = visible ? "text" : SECRET_TYPE;
@@ -458,12 +431,8 @@ elements.toggleSk.addEventListener("click", () => {
 
 elements.clearButton.addEventListener("click", () => {
   elements.sk.value = "";
-  elements.orgId.value = "";
   state.sessionKey = "";
-  try {
-    sessionStorage.removeItem(SESSION_STORAGE);
-    sessionStorage.removeItem(ORGANIZATION_STORAGE);
-  } catch {}
+  void chrome.storage.session.remove(SESSION_STORAGE).catch(() => {});
   resetQueryState();
   hideError();
   elements.sk.focus();
@@ -490,11 +459,11 @@ elements.updateButton.addEventListener("click", () => {
   if (state.releaseUrl) void chrome.tabs.create({ url: state.releaseUrl });
 });
 
-restoreInputs();
 elements.sk.type = SECRET_TYPE;
 elements.extensionVersion.textContent = currentVersion;
 elements.localBadge.textContent = "扩展内查询";
 updateQueryLabel();
+void restoreInputs().then(updateQueryLabel);
 
 let lastCheck = 0;
 try {

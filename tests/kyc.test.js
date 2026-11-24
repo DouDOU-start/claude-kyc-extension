@@ -40,7 +40,7 @@ test("session key accepts Claude web values and rejects header injection", () =>
   assert.equal(normalizeSessionKey("value\\other").ok, false);
 });
 
-test("organization IDs are optional and reject whitespace", () => {
+test("organization IDs are validated before querying", () => {
   assert.deepEqual(normalizeOrganizationID("  "), { ok: true, value: "" });
   assert.deepEqual(normalizeOrganizationID(" org-123 "), { ok: true, value: "org-123" });
   assert.equal(normalizeOrganizationID("has spaces").ok, false);

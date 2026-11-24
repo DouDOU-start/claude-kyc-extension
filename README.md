@@ -11,8 +11,9 @@ A pure Manifest V3 browser extension for checking Claude account KYC status with
 ## Features
 
 - No installer, native helper, local server, or Go runtime.
+- Runs in the Chrome side panel, so it stays open while you complete verification in another tab.
 - Load the same folder into Chrome or Edge.
-- Optional organization ID; omitted means organizations are discovered from the session key.
+- Organizations are discovered from the session key; choose one only when multiple are available.
 - Explicit refresh and retry actions for KYC verification.
 - HTTPS-only vendor link validation and a 60-second temporary link window.
 - HTTP, HTTPS, SOCKS5, and SOCKS5H proxy support with optional authentication.
@@ -43,13 +44,12 @@ Chrome does not install a ZIP by dragging it onto the extensions page; extract t
 
 ## Usage
 
-1. Click the Claude KYC toolbar button.
+1. Click the Claude KYC toolbar button to open the side panel.
 2. Enter a proxy, or leave it empty to use the browser's current network.
 3. Enter the Claude web `sessionKey`.
-4. Optionally enter an organization ID.
-5. Click **查询 KYC** / **Check KYC**.
-6. Click **获取验证链接** to request the official Persona URL.
-7. Finish verification in the browser, then click **刷新状态**.
+4. Click **查询 KYC** / **Check KYC**.
+5. Click **获取验证链接** to request the official Persona URL.
+6. Finish verification in the browser, then click **刷新状态**.
 
 ### Proxy formats
 
@@ -86,13 +86,14 @@ If the extension is published to the Chrome Web Store, Chrome handles automatic 
 | `proxy` | Temporarily route `claude.ai` through the entered proxy |
 | `webRequest` + `webRequestAuthProvider` | Supply optional proxy authentication |
 | `declarativeNetRequestWithHostAccess` | Add the session key to the request without touching browser cookies |
-| `storage` | Keep the proxy and temporary proxy credentials in browser-managed storage |
+| `storage` | Keep the browser-session SK, proxy, and temporary proxy credentials |
+| `sidePanel` | Open the query interface in Chrome's side panel |
 | `clipboardWrite` | Copy the verification URL |
 | `host_permissions` | Access `claude.ai` and the GitHub Releases API |
 
 ## Privacy and security
 
-- The session key is held in the extension page's `sessionStorage` and is cleared when the tab closes.
+- The session key is held in browser session storage and is cleared when the browser session ends or **清空 SK** is clicked.
 - The proxy URL is stored in local browser storage.
 - No project server is used.
 - The extension never sends the session key or proxy to GitHub.
@@ -125,7 +126,7 @@ node --check extension/lib/release.js
 ```text
 extension/
   manifest.json       Manifest V3 entry
-  app.html            Full-page extension UI
+  sidepanel.html      Chrome side panel UI
   app.js              UI controller
   background.js       Proxy auth and request orchestration
   lib/

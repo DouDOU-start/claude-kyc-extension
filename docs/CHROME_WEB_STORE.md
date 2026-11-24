@@ -8,6 +8,7 @@ This is a pure extension. The store package is the `extension` folder; no instal
 - `webRequest` / `webRequestAuthProvider`: supplies optional proxy authentication.
 - `declarativeNetRequestWithHostAccess`: adds the supplied session key to the request without reading browser cookies.
 - `storage`: remembers the proxy and keeps proxy credentials temporarily during a request.
+- `sidePanel`: displays the query interface in Chrome's side panel so it remains open during verification.
 - `clipboardWrite`: copies the official Persona verification link.
 - `host_permissions`: accesses `claude.ai` and the public GitHub Releases API.
 

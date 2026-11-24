@@ -21,7 +21,7 @@ Include the affected version, reproduction steps, impact, and suggested mitigati
 - Proxy URLs may contain credentials.
 - Persona verification URLs may contain inquiry tokens.
 
-The extension keeps the session key in `sessionStorage`, injects it only into request-scoped headers, and clears temporary proxy credentials after each request. It does not read or modify existing Claude cookies.
+The extension keeps the session key in browser session storage, injects it only into request-scoped headers, and clears temporary proxy credentials after each request. It does not read or modify existing Claude cookies.
 
 ## Update trust
 

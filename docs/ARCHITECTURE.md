@@ -3,7 +3,7 @@
 ## Components
 
 ```text
-Extension page (app.html / app.js)
+Side panel (sidepanel.html / app.js)
         |
         | chrome.runtime.sendMessage
         v
@@ -20,7 +20,7 @@ Background service worker
 
 ## Request flow
 
-1. The page validates SK, proxy, and optional organization ID.
+1. The page validates SK and proxy.
 2. The background service worker receives the request over a private extension message.
 3. If a proxy is configured, it generates a PAC script that routes only `claude.ai` through that proxy.
 4. Proxy credentials are placed in session storage for the auth provider.
