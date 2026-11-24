@@ -331,13 +331,15 @@ select:disabled {
   background: #f7f3ed;
   color: var(--muted);
   font-weight: 600;
-  text-align: left;
+  text-align: center;
+  vertical-align: middle;
 }
 
 .batch-results td {
   padding: 7px 6px;
   border-bottom: 1px solid #eee8e0;
-  vertical-align: top;
+  text-align: center;
+  vertical-align: middle;
 }
 
 .batch-results tr:last-child td {
@@ -468,7 +470,7 @@ button:disabled {
 
 .result-top {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 24px;
 }

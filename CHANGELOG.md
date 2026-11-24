@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.1
+
+- Center batch result headers and cells horizontally and vertically.
+
 ## 1.1.0
 
 - Add batch SK verification with a fixed concurrency of one.
