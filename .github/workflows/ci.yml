@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Test
+        shell: pwsh
+        run: |
+          Push-Location extension
+          node --test tests/*.test.js
+          Pop-Location
+          go test ./...
+          go vet ./...
+      - name: Build release package
+        shell: pwsh
+        run: ./scripts/build.ps1 -SkipTests
+      - uses: actions/upload-artifact@v4
+        with:
+          name: claude-kyc-extension
+          path: |
+            dist/*.zip
+            dist/SHA256SUMS.txt

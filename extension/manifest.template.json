@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "Claude KYC 查询",
+  "short_name": "Claude KYC",
+  "version": "1.0.0",
+  "description": "填写 Claude 网页 SK 和代理，查询账号 KYC 状态。",
+  "homepage_url": "https://github.com/DouDOU-start/claude-kyc-extension",
+  "minimum_chrome_version": "102",
+  "action": {
+    "default_title": "Claude KYC 查询",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "permissions": [
+    "nativeMessaging",
+    "clipboardWrite"
+  ],
+  "key": "__EXTENSION_KEY__"
+}
