@@ -358,6 +358,15 @@ select:disabled {
   width: 82px;
 }
 
+.batch-results .col-link {
+  width: 64px;
+}
+
+.batch-link .inline-action {
+  padding: 2px 0;
+  font-size: 11px;
+}
+
 .batch-sk {
   overflow: hidden;
   font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;

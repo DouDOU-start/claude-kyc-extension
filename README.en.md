@@ -15,10 +15,9 @@ Check Claude KYC status from Chrome's side panel with a Claude web session key a
 - Single and batch SK queries, batch concurrency fixed at 1
 - Automatic organization discovery with manual selection when needed
 - Verification link, status refresh, and retry actions
-- Batch results table with `.xlsx` export
+- Batch results table with verification links and `.xlsx` export
 - HTTP and SOCKS5 proxies with optional authentication
 - `{session}` and `{region}` proxy placeholders
-- Daily GitHub Release update check
 
 ## Requirements
 
@@ -50,7 +49,7 @@ Open the side panel from the toolbar, then enter a proxy and SK.
 2. Click **开始验证** / **Start** and watch the results table.
 3. Click **导出 Excel** / **Export Excel** to download the workbook.
 
-Batch mode checks status only. Use single mode to request verification links. Exported SKs are masked.
+Batch mode generates verification links for results that need them; links are included in the Excel export. Exported SKs are masked.
 
 ## Proxy formats
 
@@ -62,20 +61,6 @@ host:port:username:secret
 ```
 
 Authenticated HTTP and SOCKS5 proxies are supported. The proxy is applied only to `claude.ai` during the request and restored afterward.
-
-## Updates
-
-GitHub-installed copies check for a new release once per day and show a download button. Chromium does not allow a sideloaded extension to update itself silently; download the new version, overwrite the folder, and click **Reload**.
-
-Chrome Web Store distribution provides automatic updates.
-
-## Permissions
-
-- `proxy`: route Claude requests through the configured proxy.
-- `webRequest` / `webRequestAuthProvider`: provide optional proxy authentication.
-- `declarativeNetRequestWithHostAccess`: inject the SK into one request without modifying browser cookies.
-- `sidePanel` / `storage` / `clipboardWrite`: side panel UI, state, and verification-link copying.
-- `host_permissions`: access only `claude.ai` and the GitHub Releases API.
 
 ## Privacy and security
 

@@ -409,7 +409,7 @@ async function queryBatchSK(sk, proxy) {
     try {
       const status = await sendRequest("query", {
         orgId: organization.id,
-        refreshSession: false,
+        refreshSession: true,
         attemptRetry: false,
       }, credentials);
       results.push({ organization, status });
@@ -436,6 +436,7 @@ async function queryBatchSK(sk, proxy) {
     orgName: selected.organization.name || "",
     orgId: selected.organization.id,
     orgDetails: details,
+    vendorUrl: selected.status.vendor_inquiry_url || "",
     checkedAt: new Date().toISOString(),
   };
 }
@@ -469,7 +470,23 @@ function renderBatchRows() {
       organization.textContent = row.orgName ? `${row.orgName}${row.orgId ? ` · ${row.orgId}` : ""}` : row.orgId || "";
       organization.title = row.orgDetails || organization.textContent;
     }
-    tr.append(index, sk, status, organization);
+    const link = document.createElement("td");
+    link.className = "batch-link";
+    const safeUrl = row.vendorUrl ? vendorURL(row.vendorUrl) : "";
+    if (safeUrl) {
+      const copy = document.createElement("button");
+      copy.type = "button";
+      copy.className = "inline-action";
+      copy.textContent = "复制";
+      copy.title = safeUrl;
+      copy.addEventListener("click", async () => {
+        if (await copyText(safeUrl)) toast("验证链接已复制");
+      });
+      link.append(copy);
+    } else {
+      link.textContent = "—";
+    }
+    tr.append(index, sk, status, organization, link);
     elements.batchTbody.append(tr);
   }
   const suffix = state.batchStopRequested && !state.batchRunning ? " · 已停止" : "";
@@ -515,6 +532,7 @@ async function startBatch() {
     orgName: "",
     orgId: "",
     orgDetails: "",
+    vendorUrl: "",
     checkedAt: "",
     durationMs: 0,
     error: "",
@@ -580,6 +598,7 @@ function exportBatchXLSX() {
     { header: "组织名称", key: "orgName", width: 22 },
     { header: "组织 ID", key: "orgId", width: 26 },
     { header: "组织结果明细", key: "orgDetails", width: 38 },
+    { header: "验证链接", key: "vendorUrl", width: 48 },
     { header: "查询时间", key: "checkedAt", width: 22 },
     { header: "耗时(ms)", key: "durationMs", width: 12 },
     { header: "错误", key: "error", width: 32 },
@@ -592,6 +611,7 @@ function exportBatchXLSX() {
     orgName: row.orgName,
     orgId: row.orgId,
     orgDetails: row.orgDetails,
+    vendorUrl: row.vendorUrl ? vendorURL(row.vendorUrl) : "",
     checkedAt: row.checkedAt ? formatTime(row.checkedAt) : "",
     durationMs: row.durationMs,
     error: row.error,

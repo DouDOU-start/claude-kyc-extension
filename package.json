@@ -1,6 +1,6 @@
 {
   "name": "claude-kyc-extension",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Pure Manifest V3 Claude KYC browser extension and tests.",
   "private": true,
   "type": "module",

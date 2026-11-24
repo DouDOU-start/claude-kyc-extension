@@ -15,10 +15,9 @@
 - 单个查询和批量查询，批量并发固定为 1
 - 自动读取 Claude 组织，多组织时手动选择
 - 获取验证链接、刷新状态、重新验证
-- 批量结果表格，支持导出 `.xlsx`
+- 批量结果表格，包含验证链接并支持导出 `.xlsx`
 - HTTP / SOCKS5 代理及认证
 - 支持 `{session}`、`{region}` 代理模板
-- 每日检查 GitHub Release 更新
 
 ## 环境
 
@@ -50,7 +49,7 @@
 2. 点击“开始验证”，结果会实时写入表格。
 3. 点击“导出 Excel”下载结果。
 
-批量模式只查询状态，不生成验证链接；导出的 SK 已脱敏。
+批量模式会为需要验证的结果生成验证链接，链接也会写入 Excel；导出的 SK 已脱敏。
 
 ## 代理格式
 
@@ -62,20 +61,6 @@ host:port:username:secret
 ```
 
 支持带用户名和密码的 HTTP / SOCKS5 代理。请求期间代理仅作用于 `claude.ai`，结束后自动恢复。
-
-## 更新
-
-GitHub 侧载版每天检查一次新版本，并显示下载入口。Chrome 不允许侧载扩展静默更新，下载后覆盖目录并在扩展页点击“重新加载”。
-
-上架 Chrome Web Store 后可获得商店自动更新。
-
-## 权限
-
-- `proxy`：查询期间路由 Claude 请求。
-- `webRequest` / `webRequestAuthProvider`：提供可选代理认证。
-- `declarativeNetRequestWithHostAccess`：为单次请求注入 SK，不修改浏览器 Cookie。
-- `sidePanel` / `storage` / `clipboardWrite`：侧边栏、状态保存和复制验证链接。
-- `host_permissions`：仅访问 `claude.ai` 和 GitHub Releases API。
 
 ## 隐私与安全
 

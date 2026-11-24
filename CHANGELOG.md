@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.2
+
+- Generate verification links during batch queries and include them in the results table and Excel export.
+
 ## 1.1.1
 
 - Center batch result headers and cells horizontally and vertically.
