@@ -71,12 +71,10 @@ test("organization request sets proxy, injects session, and cleans up", async ()
     assert.equal(captured.init.credentials, "omit");
     assert.equal(captured.url, "https://claude.ai/api/organizations");
     const add = calls.rules.find((rule) => rule.addRules)?.addRules?.[0];
-    const nonce = captured.init.headers["x-claude-kyc"];
     assert.equal(add.action.requestHeaders[0].header, "cookie");
     assert.equal(add.action.requestHeaders[0].operation, "append");
     assert.equal(add.action.requestHeaders[0].value, "sessionKey=" + "fixture-session");
-    assert.deepEqual(add.action.requestHeaders[1], { header: "x-claude-kyc", operation: "remove" });
-    assert.deepEqual(add.condition.requestHeaders, [{ header: "x-claude-kyc", values: [nonce] }]);
+    assert.deepEqual(add.condition.tabIds, [-1]);
     assert.equal(calls.proxyClears, 2);
     assert.equal(Object.keys(calls.storage).length, 0);
     assert.ok(calls.rules.some((rule) => rule.removeRuleIds));

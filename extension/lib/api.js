@@ -22,7 +22,7 @@ async function setProxyAuth(config) {
   }
 }
 
-async function installCookieRule(sessionKey, nonce) {
+async function installCookieRule(sessionKey) {
   const rule = {
     id: COOKIE_RULE_ID,
     priority: 1,
@@ -34,16 +34,12 @@ async function installCookieRule(sessionKey, nonce) {
           operation: "append",
           value: `sessionKey=${sessionKey}`,
         },
-        {
-          header: "x-claude-kyc",
-          operation: "remove",
-        },
       ],
     },
     condition: {
       urlFilter: "||claude.ai/api/",
       resourceTypes: ["xmlhttprequest", "other"],
-      requestHeaders: [{ header: "x-claude-kyc", values: [nonce] }],
+      tabIds: [-1],
     },
   };
 
@@ -58,13 +54,12 @@ async function installCookieRule(sessionKey, nonce) {
   } catch {
     throw new RequestError(
       "browser_api",
-      "浏览器无法注入 KYC 会话，请确认 Chrome 版本不低于 148。",
+      "浏览器无法注入 KYC 会话，请更新 Chrome 或重新加载扩展后再试。",
     );
   }
 }
 
 async function withRequestContext(sessionKey, proxyConfig, callback) {
-  const nonce = crypto.randomUUID();
   let proxyActive = false;
   let ruleActive = false;
   try {
@@ -88,9 +83,9 @@ async function withRequestContext(sessionKey, proxyConfig, callback) {
       }
       proxyActive = true;
     }
-    await installCookieRule(sessionKey, nonce);
+    await installCookieRule(sessionKey);
     ruleActive = true;
-    return await callback(nonce);
+    return await callback();
   } finally {
     if (ruleActive) {
       await chrome.declarativeNetRequest
@@ -133,7 +128,7 @@ async function readLimitedText(response) {
 }
 
 async function claudeRequest(sessionKey, proxyConfig, endpoint) {
-  return withRequestContext(sessionKey, proxyConfig, async (nonce) => {
+  return withRequestContext(sessionKey, proxyConfig, async () => {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 50_000);
     let response;
@@ -148,7 +143,6 @@ async function claudeRequest(sessionKey, proxyConfig, endpoint) {
           "content-type": "application/json",
           "accept": "application/json, text/event-stream",
           "anthropic-client-platform": "web_claude_ai",
-          "x-claude-kyc": nonce,
         },
       });
     } catch (error) {

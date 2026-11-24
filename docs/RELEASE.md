@@ -2,20 +2,20 @@
 
 ## Versioning
 
-Set the semantic version in `extension/manifest.json`, for example `1.0.2`. The Git tag must be `v` plus the same version: `v1.0.2`.
+Set the semantic version in `extension/manifest.json`, for example `1.0.3`. The Git tag must be `v` plus the same version: `v1.0.3`.
 
 ## Publish with GitHub Actions
 
 ```sh
-git tag -a v1.0.2 -m "v1.0.2"
-git push origin v1.0.2
+git tag -a v1.0.3 -m "v1.0.3"
+git push origin v1.0.3
 ```
 
 The release workflow:
 
 1. validates that the tag matches `extension/manifest.json`;
 2. runs the Node tests;
-3. creates `claude-kyc-extension-v1.0.2.zip` with `manifest.json` at the ZIP root;
+3. creates `claude-kyc-extension-v1.0.3.zip` with `manifest.json` at the ZIP root;
 4. creates `SHA256SUMS.txt`;
 5. publishes a GitHub Release with both assets.
 
@@ -27,8 +27,8 @@ If Actions is unavailable:
 
 ```powershell
 New-Item -ItemType Directory -Force dist | Out-Null
-Compress-Archive -Path extension\* -DestinationPath dist\claude-kyc-extension-v1.0.2.zip -Force
-(Get-FileHash dist\claude-kyc-extension-v1.0.2.zip -Algorithm SHA256).Hash
+Compress-Archive -Path extension\* -DestinationPath dist\claude-kyc-extension-v1.0.3.zip -Force
+(Get-FileHash dist\claude-kyc-extension-v1.0.3.zip -Algorithm SHA256).Hash
 ```
 
 Upload the ZIP to a non-draft GitHub Release. The extension's update checker uses the latest published release tag.

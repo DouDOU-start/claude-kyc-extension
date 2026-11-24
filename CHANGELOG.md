@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.3
+
+- Fix the request-scoped cookie rule for Chrome's declarativeNetRequest schema.
+
 ## 1.0.2
 
 - Remove the manual organization ID field; organizations are always discovered from the session key.
