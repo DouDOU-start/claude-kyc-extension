@@ -30,6 +30,10 @@ Background service worker
 
 Requests are serialized because proxy configuration is profile-wide.
 
+## Batch mode
+
+Batch mode parses one SK per line and processes SKs sequentially. A later SK is not started until all organization/status requests for the current SK have finished. The UI updates the table after each row and exports the completed rows with a dependency-free XLSX writer.
+
 ## Failure cleanup
 
 - A `finally` block clears the proxy, request rule, and credentials.

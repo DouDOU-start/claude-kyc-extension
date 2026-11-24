@@ -13,9 +13,10 @@ import {
 } from "./lib/kyc.js";
 import { parseProxy } from "./lib/proxy.js";
 import { RELEASES_URL, checkLatestRelease } from "./lib/release.js";
+import { buildXLSX } from "./lib/xlsx.js";
+import { batchPriority, maskSK, parseBatchInput } from "./lib/batch.js";
 
 const PROXY_STORAGE = "claude-kyc.proxy";
-const SESSION_STORAGE = "claude-kyc.session-key";
 const UPDATE_CHECK_STORAGE = "claude-kyc.last-update-check";
 const UPDATE_CHECK_INTERVAL = 24 * 60 * 60 * 1000;
 const SECRET_TYPE = ["pass", "word"].join("");
@@ -27,7 +28,6 @@ const elements = {
   sk: document.querySelector("#sk"),
   toggleSk: document.querySelector("#toggle-sk"),
   queryButton: document.querySelector("#query-button"),
-  clearButton: document.querySelector("#clear-button"),
   localBadge: document.querySelector("#local-badge"),
   notice: document.querySelector("#notice"),
   noticeTitle: document.querySelector("#notice-title"),
@@ -52,6 +52,19 @@ const elements = {
   updateButton: document.querySelector("#update-button"),
   extensionVersion: document.querySelector("#extension-version"),
   checkUpdate: document.querySelector("#check-update"),
+  singleTab: document.querySelector("#single-tab"),
+  batchTab: document.querySelector("#batch-tab"),
+  singleView: document.querySelector("#single-view"),
+  batchView: document.querySelector("#batch-view"),
+  batchSk: document.querySelector("#batch-sk"),
+  batchStart: document.querySelector("#batch-start"),
+  batchStop: document.querySelector("#batch-stop"),
+  batchProgress: document.querySelector("#batch-progress"),
+  batchNotice: document.querySelector("#batch-notice"),
+  batchNoticeMessage: document.querySelector("#batch-notice-message"),
+  batchResults: document.querySelector("#batch-results"),
+  batchTbody: document.querySelector("#batch-tbody"),
+  exportXlsx: document.querySelector("#export-xlsx"),
 };
 
 const state = {
@@ -65,6 +78,10 @@ const state = {
   busy: false,
   checkingUpdate: false,
   releaseUrl: "",
+  batchRunning: false,
+  batchStopRequested: false,
+  batchRows: [],
+  batchCompleted: 0,
 };
 
 let toastTimer;
@@ -78,15 +95,9 @@ class UIError extends Error {
   }
 }
 
-async function restoreInputs() {
+function restoreInputs() {
   try {
     elements.proxy.value = localStorage.getItem(PROXY_STORAGE) || "";
-  } catch {}
-  try {
-    const stored = await chrome.storage.session.get(SESSION_STORAGE);
-    if (typeof stored?.[SESSION_STORAGE] === "string") {
-      elements.sk.value = stored[SESSION_STORAGE];
-    }
   } catch {}
 }
 
@@ -94,17 +105,16 @@ function rememberInputs() {
   try {
     localStorage.setItem(PROXY_STORAGE, elements.proxy.value);
   } catch {}
-  void chrome.storage.session.set({ [SESSION_STORAGE]: elements.sk.value }).catch(() => {});
 }
 
-function sendRequest(action, extra = {}) {
+function sendRequest(action, extra = {}, credentials = {}) {
   return new Promise((resolve, reject) => {
     chrome.runtime.sendMessage(
       {
         type: "claude-kyc",
         action,
-        sessionKey: state.sessionKey,
-        proxy: state.proxy,
+        sessionKey: credentials.sessionKey ?? state.sessionKey,
+        proxy: credentials.proxy ?? state.proxy,
         ...extra,
       },
       (response) => {
@@ -135,8 +145,9 @@ function setBusy(busy) {
   document.body.classList.toggle("is-busy", busy);
   elements.proxy.disabled = busy;
   elements.sk.disabled = busy;
-  elements.clearButton.disabled = busy;
   elements.organization.disabled = busy;
+  elements.singleTab.disabled = busy;
+  elements.batchTab.disabled = busy;
   for (const button of [elements.refreshStatus, elements.refreshLink, elements.retry, elements.copyLink]) {
     button.disabled = busy;
   }
@@ -152,6 +163,29 @@ function updateQueryLabel() {
   }
   elements.queryButton.disabled = !elements.sk.value.trim();
   elements.queryButton.textContent = state.organizations.length > 1 && state.orgId ? "查询所选组织" : "查询 KYC";
+}
+
+function switchMode(mode) {
+  if (state.batchRunning) return;
+  const batch = mode === "batch";
+  elements.singleView.hidden = batch;
+  elements.batchView.hidden = !batch;
+  elements.singleTab.classList.toggle("is-active", !batch);
+  elements.batchTab.classList.toggle("is-active", batch);
+}
+
+function setBatchRunning(running) {
+  state.batchRunning = running;
+  elements.proxy.disabled = running;
+  elements.batchSk.disabled = running;
+  elements.batchStart.disabled = running;
+  elements.batchStop.disabled = !running;
+  elements.singleTab.disabled = running;
+  elements.batchTab.disabled = running;
+  elements.localBadge.textContent = running ? "批量查询中" : "扩展内查询";
+  if (!running) {
+    elements.batchStop.textContent = "停止";
+  }
 }
 
 function resetQueryState() {
@@ -367,6 +401,214 @@ async function copyVendorLink() {
   if (await copyText(elements.vendorLink.textContent)) toast("链接已复制");
 }
 
+async function queryBatchSK(sk, proxy) {
+  const credentials = { sessionKey: sk, proxy };
+  const organizations = await sendRequest("organizations", {}, credentials);
+  const results = [];
+  for (const organization of organizations) {
+    try {
+      const status = await sendRequest("query", {
+        orgId: organization.id,
+        refreshSession: false,
+        attemptRetry: false,
+      }, credentials);
+      results.push({ organization, status });
+    } catch (error) {
+      results.push({ organization, error });
+    }
+  }
+  const successful = results.filter((item) => !item.error);
+  if (successful.length === 0) {
+    const first = results.find((item) => item.error)?.error;
+    throw new UIError(first?.code || "query_failed", first?.message || "KYC 查询失败。");
+  }
+  successful.sort((left, right) => batchPriority(right.status.status) - batchPriority(left.status.status));
+  const selected = successful[0];
+  const details = results
+    .map((item) => {
+      const name = item.organization.name || item.organization.id;
+      return `${name}: ${item.error ? "失败" : statusLabel(item.status.status)}`;
+    })
+    .join("；");
+  return {
+    status: selected.status.status,
+    statusText: statusLabel(selected.status.status),
+    orgName: selected.organization.name || "",
+    orgId: selected.organization.id,
+    orgDetails: details,
+    checkedAt: new Date().toISOString(),
+  };
+}
+
+function renderBatchRows() {
+  const total = state.batchRows.length;
+  elements.batchResults.hidden = total === 0;
+  elements.batchTbody.replaceChildren();
+  for (const row of state.batchRows) {
+    const tr = document.createElement("tr");
+    const index = document.createElement("td");
+    index.textContent = String(row.index);
+    const sk = document.createElement("td");
+    sk.className = "batch-sk";
+    sk.textContent = row.skMasked;
+    sk.title = row.skMasked;
+    const status = document.createElement("td");
+    status.className = "batch-status";
+    const stopped = row.error === "已停止";
+    if (row.error && !stopped) status.classList.add("tone-danger");
+    else if (row.running) status.classList.add("tone-pending");
+    else if (row.status) status.classList.add(`tone-${statusTone(row.status)}`);
+    status.textContent = row.running ? "查询中" : stopped ? "已停止" : row.error ? "失败" : row.statusText || "等待";
+    const organization = document.createElement("td");
+    organization.className = "batch-org";
+    if (row.error) {
+      if (!stopped) organization.classList.add("batch-error");
+      organization.textContent = row.error;
+      organization.title = row.error;
+    } else {
+      organization.textContent = row.orgName ? `${row.orgName}${row.orgId ? ` · ${row.orgId}` : ""}` : row.orgId || "";
+      organization.title = row.orgDetails || organization.textContent;
+    }
+    tr.append(index, sk, status, organization);
+    elements.batchTbody.append(tr);
+  }
+  const suffix = state.batchStopRequested && !state.batchRunning ? " · 已停止" : "";
+  elements.batchProgress.textContent = total
+    ? `${state.batchCompleted}/${total}${suffix}`
+    : "";
+  elements.exportXlsx.disabled = state.batchRunning || total === 0;
+}
+
+function showBatchNotice(message) {
+  elements.batchNoticeMessage.textContent = message;
+  elements.batchNotice.hidden = false;
+}
+
+function hideBatchNotice() {
+  elements.batchNotice.hidden = true;
+}
+
+async function startBatch() {
+  if (state.batchRunning || state.busy) return;
+  hideBatchNotice();
+  const parsed = parseBatchInput(elements.batchSk.value);
+  if (!parsed.ok) {
+    showBatchNotice(parsed.error);
+    return;
+  }
+  const proxy = parseProxy(elements.proxy.value);
+  if (!proxy.ok) {
+    showBatchNotice(proxy.error);
+    elements.proxy.focus();
+    return;
+  }
+  const proxyValue = elements.proxy.value.trim();
+  state.proxy = proxyValue;
+  state.batchStopRequested = false;
+  state.batchCompleted = 0;
+  state.batchRows = parsed.value.map((sk, index) => ({
+    index: index + 1,
+    sk,
+    skMasked: maskSK(sk),
+    status: "",
+    statusText: "等待",
+    orgName: "",
+    orgId: "",
+    orgDetails: "",
+    checkedAt: "",
+    durationMs: 0,
+    error: "",
+    running: false,
+    done: false,
+  }));
+  setBatchRunning(true);
+  renderBatchRows();
+  try {
+    for (const row of state.batchRows) {
+      if (state.batchStopRequested) break;
+      row.running = true;
+      renderBatchRows();
+      const started = Date.now();
+      try {
+        const result = await queryBatchSK(row.sk, proxyValue);
+        Object.assign(row, result, {
+          done: true,
+          running: false,
+          durationMs: Date.now() - started,
+        });
+      } catch (error) {
+        row.error = error?.message || "查询失败";
+        row.status = "";
+        row.statusText = "失败";
+        row.done = true;
+        row.running = false;
+        row.durationMs = Date.now() - started;
+      }
+      state.batchCompleted++;
+      renderBatchRows();
+    }
+    if (state.batchStopRequested) {
+      for (const row of state.batchRows) {
+        if (!row.done) {
+          row.error = "已停止";
+          row.statusText = "已停止";
+          row.done = true;
+        }
+      }
+    }
+  } finally {
+    setBatchRunning(false);
+    renderBatchRows();
+  }
+}
+
+function stopBatch() {
+  if (!state.batchRunning) return;
+  state.batchStopRequested = true;
+  elements.batchStop.disabled = true;
+  elements.batchStop.textContent = "停止中…";
+}
+
+function exportBatchXLSX() {
+  const rows = state.batchRows.filter((row) => row.done);
+  if (rows.length === 0) return;
+  const columns = [
+    { header: "序号", key: "index", width: 7 },
+    { header: "SK（脱敏）", key: "skMasked", width: 24 },
+    { header: "状态", key: "statusText", width: 14 },
+    { header: "原始状态", key: "status", width: 14 },
+    { header: "组织名称", key: "orgName", width: 22 },
+    { header: "组织 ID", key: "orgId", width: 26 },
+    { header: "组织结果明细", key: "orgDetails", width: 38 },
+    { header: "查询时间", key: "checkedAt", width: 22 },
+    { header: "耗时(ms)", key: "durationMs", width: 12 },
+    { header: "错误", key: "error", width: 32 },
+  ];
+  const data = rows.map((row) => ({
+    index: row.index,
+    skMasked: row.skMasked,
+    statusText: row.error === "已停止" ? "已停止" : row.error ? "失败" : row.statusText,
+    status: row.status,
+    orgName: row.orgName,
+    orgId: row.orgId,
+    orgDetails: row.orgDetails,
+    checkedAt: row.checkedAt ? formatTime(row.checkedAt) : "",
+    durationMs: row.durationMs,
+    error: row.error,
+  }));
+  const blob = buildXLSX({ sheetName: "KYC结果", columns, rows: data });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  anchor.href = url;
+  anchor.download = `claude-kyc-${stamp}.xlsx`;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  toast("Excel 已导出");
+}
+
 function hideUpdateBanner() {
   state.releaseUrl = "";
   elements.updateBanner.hidden = true;
@@ -429,15 +671,6 @@ elements.toggleSk.addEventListener("click", () => {
   elements.toggleSk.setAttribute("aria-label", visible ? "隐藏 SK" : "显示 SK");
 });
 
-elements.clearButton.addEventListener("click", () => {
-  elements.sk.value = "";
-  state.sessionKey = "";
-  void chrome.storage.session.remove(SESSION_STORAGE).catch(() => {});
-  resetQueryState();
-  hideError();
-  elements.sk.focus();
-});
-
 elements.organization.addEventListener("change", () => {
   state.orgId = elements.organization.value;
   state.result = null;
@@ -458,12 +691,18 @@ elements.checkUpdate.addEventListener("click", () => void checkForUpdates(true))
 elements.updateButton.addEventListener("click", () => {
   if (state.releaseUrl) void chrome.tabs.create({ url: state.releaseUrl });
 });
+elements.singleTab.addEventListener("click", () => switchMode("single"));
+elements.batchTab.addEventListener("click", () => switchMode("batch"));
+elements.batchStart.addEventListener("click", () => void startBatch());
+elements.batchStop.addEventListener("click", () => stopBatch());
+elements.exportXlsx.addEventListener("click", () => exportBatchXLSX());
 
 elements.sk.type = SECRET_TYPE;
 elements.extensionVersion.textContent = currentVersion;
 elements.localBadge.textContent = "扩展内查询";
 updateQueryLabel();
-void restoreInputs().then(updateQueryLabel);
+restoreInputs();
+updateQueryLabel();
 
 let lastCheck = 0;
 try {

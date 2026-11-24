@@ -61,34 +61,11 @@ button {
   padding: 16px 16px 20px;
 }
 
-.masthead {
+.status-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.brand-mark {
-  width: 24px;
-  height: 24px;
-  fill: none;
-  stroke: var(--accent);
-  stroke-width: 1.7;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.masthead h1 {
-  margin: 0;
-  font-size: 17px;
-  font-weight: 650;
-  letter-spacing: -0.02em;
+  justify-content: flex-end;
+  margin-bottom: 8px;
 }
 
 .local-badge {
@@ -145,6 +122,39 @@ button {
 .compact {
   margin-top: 10px;
   padding: 12px 14px;
+}
+
+.proxy-panel {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.tabs {
+  display: flex;
+  gap: 3px;
+  margin: 10px 0;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #ebe6df;
+}
+
+.tab {
+  flex: 1;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.tab.is-active {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 1px 4px rgba(57, 45, 35, 0.08);
 }
 
 .field {
@@ -235,6 +245,145 @@ select:disabled {
   display: flex;
   gap: 10px;
   margin-top: 24px;
+}
+
+.batch-input {
+  width: 100%;
+  min-height: 112px;
+  padding: 10px 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  background: var(--surface-strong);
+  color: var(--ink);
+  outline: none;
+  font: 12px/1.5 ui-monospace, "Cascadia Mono", Consolas, monospace;
+  resize: vertical;
+}
+
+.batch-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(189, 91, 58, 0.13);
+}
+
+.batch-input:disabled {
+  background: #f2eee8;
+}
+
+.batch-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.batch-actions .primary {
+  flex: 0 0 auto;
+  padding-inline: 14px;
+}
+
+.batch-progress {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.batch-results {
+  margin-top: 10px;
+  overflow: hidden;
+}
+
+.batch-results-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.batch-results-head strong {
+  font-size: 12px;
+}
+
+.batch-results-head .secondary {
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 11px;
+}
+
+.table-wrap {
+  max-height: 300px;
+  overflow: auto;
+}
+
+.batch-results table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 11px;
+}
+
+.batch-results th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 7px 6px;
+  border-bottom: 1px solid var(--line);
+  background: #f7f3ed;
+  color: var(--muted);
+  font-weight: 600;
+  text-align: left;
+}
+
+.batch-results td {
+  padding: 7px 6px;
+  border-bottom: 1px solid #eee8e0;
+  vertical-align: top;
+}
+
+.batch-results tr:last-child td {
+  border-bottom: 0;
+}
+
+.batch-results .col-index {
+  width: 28px;
+}
+
+.batch-results .col-sk {
+  width: 30%;
+}
+
+.batch-results .col-status {
+  width: 82px;
+}
+
+.batch-sk {
+  overflow: hidden;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.batch-org {
+  overflow-wrap: anywhere;
+}
+
+.batch-status.tone-success {
+  color: var(--success);
+  font-weight: 600;
+}
+
+.batch-status.tone-danger {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.batch-status.tone-pending {
+  color: var(--pending);
+  font-weight: 600;
+}
+
+.batch-error {
+  color: var(--danger);
 }
 
 button.primary,

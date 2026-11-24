@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Claude KYC 查询",
   "short_name": "Claude KYC",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "description": "填写 Claude 网页 SK 和代理，查询账号 KYC 状态。",
   "homepage_url": "https://github.com/DouDOU-start/claude-kyc-extension",
   "minimum_chrome_version": "148",

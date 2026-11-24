@@ -8,16 +8,9 @@
 </head>
 <body>
   <main class="shell">
-    <header class="masthead">
-      <div class="brand">
-        <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M12 2.75 4.75 5.5v5.25c0 4.55 3.1 8.2 7.25 9.5 4.15-1.3 7.25-4.95 7.25-9.5V5.5L12 2.75Z"></path>
-          <path d="m8.4 11.8 2.3 2.3 4.9-5.4"></path>
-        </svg>
-        <h1>Claude KYC</h1>
-      </div>
+    <div class="status-row">
       <span id="local-badge" class="local-badge">扩展内查询</span>
-    </header>
+    </div>
 
     <section id="update-banner" class="update-banner" hidden>
       <div>
@@ -27,70 +20,117 @@
       <button id="update-button" class="primary update-button" type="button">更新</button>
     </section>
 
-    <section class="panel credentials">
-      <form id="query-form" novalidate>
-        <label class="field">
-          <span>代理 IP</span>
-          <input id="proxy" name="proxy" type="text" autocomplete="off" spellcheck="false"
-            placeholder="http://host:port 或 host:port:用户名:密码" maxlength="8192">
-        </label>
-
-        <label class="field">
-          <span>SK</span>
-          <span class="secret-wrap">
-            <input id="sk" name="sk" type="pass&#119;ord" autocomplete="off" spellcheck="false"
-              placeholder="Claude 网页 sessionKey" maxlength="16384">
-            <button id="toggle-sk" class="inline-action" type="button" aria-label="显示 SK">显示</button>
-          </span>
-        </label>
-
-        <p class="privacy-line">SK 保存在浏览器会话存储，关闭浏览器后清除。</p>
-
-        <div class="form-actions">
-          <button id="query-button" class="primary" type="submit">查询 KYC</button>
-          <button id="clear-button" class="quiet" type="button">清空 SK</button>
-        </div>
-      </form>
-    </section>
-
-    <section id="notice" class="notice" role="alert" hidden>
-      <div class="notice-title" id="notice-title"></div>
-      <p id="notice-message"></p>
-    </section>
-
-    <section id="organization-field" class="panel compact" hidden>
+    <section class="panel compact proxy-panel">
       <label class="field">
-        <span>Claude 组织</span>
-        <select id="organization" aria-label="选择 Claude 组织"></select>
+        <span>代理 IP</span>
+        <input id="proxy" name="proxy" type="text" autocomplete="off" spellcheck="false"
+          placeholder="http://host:port 或 host:port:用户名:密码" maxlength="8192">
       </label>
     </section>
 
-    <section id="result" class="panel result" hidden>
-      <div class="result-top">
-        <div>
-          <div id="status-label" class="status-label"></div>
-          <div id="result-org" class="result-org"></div>
-        </div>
-        <div id="result-time" class="result-time"></div>
-      </div>
+    <nav class="tabs" aria-label="查询模式">
+      <button id="single-tab" class="tab is-active" type="button">单个查询</button>
+      <button id="batch-tab" class="tab" type="button">批量查询</button>
+    </nav>
 
-      <div id="actions" class="result-actions">
-        <button id="refresh-status" class="secondary" type="button">刷新状态</button>
-        <button id="refresh-link" class="secondary" type="button">获取验证链接</button>
-        <button id="retry" class="secondary" type="button" hidden>重新验证</button>
-      </div>
+    <section id="single-view">
+      <section class="panel credentials">
+        <form id="query-form" novalidate>
+          <label class="field">
+            <span>SK</span>
+            <span class="secret-wrap">
+              <input id="sk" name="sk" type="pass&#119;ord" autocomplete="off" spellcheck="false"
+                placeholder="Claude 网页 sessionKey" maxlength="16384">
+              <button id="toggle-sk" class="inline-action" type="button" aria-label="显示 SK">显示</button>
+            </span>
+          </label>
 
-      <div id="vendor-panel" class="vendor-panel" hidden>
-        <button id="vendor-link" class="vendor-link" type="button"></button>
-        <div class="vendor-meta">
-          <span id="vendor-expiry"></span>
-          <button id="copy-link" class="inline-action" type="button">复制链接</button>
+          <div class="form-actions">
+            <button id="query-button" class="primary" type="submit">查询 KYC</button>
+          </div>
+        </form>
+      </section>
+
+      <section id="notice" class="notice" role="alert" hidden>
+        <div class="notice-title" id="notice-title"></div>
+        <p id="notice-message"></p>
+      </section>
+
+      <section id="organization-field" class="panel compact" hidden>
+        <label class="field">
+          <span>Claude 组织</span>
+          <select id="organization" aria-label="选择 Claude 组织"></select>
+        </label>
+      </section>
+
+      <section id="result" class="panel result" hidden>
+        <div class="result-top">
+          <div>
+            <div id="status-label" class="status-label"></div>
+            <div id="result-org" class="result-org"></div>
+          </div>
+          <div id="result-time" class="result-time"></div>
         </div>
-      </div>
+
+        <div id="actions" class="result-actions">
+          <button id="refresh-status" class="secondary" type="button">刷新状态</button>
+          <button id="refresh-link" class="secondary" type="button">获取验证链接</button>
+          <button id="retry" class="secondary" type="button" hidden>重新验证</button>
+        </div>
+
+        <div id="vendor-panel" class="vendor-panel" hidden>
+          <button id="vendor-link" class="vendor-link" type="button"></button>
+          <div class="vendor-meta">
+            <span id="vendor-expiry"></span>
+            <button id="copy-link" class="inline-action" type="button">复制链接</button>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <section id="batch-view" hidden>
+      <section class="panel credentials">
+        <label class="field">
+          <span>SK 列表</span>
+          <textarea id="batch-sk" class="batch-input" autocomplete="off" spellcheck="false"
+            placeholder="每行一个 SK"></textarea>
+        </label>
+        <p class="privacy-line">每行一个 SK；串行查询，固定并发 1。</p>
+        <div class="batch-actions">
+          <button id="batch-start" class="primary" type="button">开始验证</button>
+          <button id="batch-stop" class="quiet" type="button" disabled>停止</button>
+          <span id="batch-progress" class="batch-progress"></span>
+        </div>
+      </section>
+
+      <section id="batch-notice" class="notice" role="alert" hidden>
+        <div class="notice-title">批量查询失败</div>
+        <p id="batch-notice-message"></p>
+      </section>
+
+      <section id="batch-results" class="panel batch-results" hidden>
+        <div class="batch-results-head">
+          <strong>验证结果</strong>
+          <button id="export-xlsx" class="secondary" type="button">导出 Excel</button>
+        </div>
+        <div class="table-wrap">
+          <table id="batch-table">
+            <thead>
+              <tr>
+                <th class="col-index">#</th>
+                <th class="col-sk">SK</th>
+                <th class="col-status">状态</th>
+                <th>组织</th>
+              </tr>
+            </thead>
+            <tbody id="batch-tbody"></tbody>
+          </table>
+        </div>
+      </section>
     </section>
 
     <footer class="footer">
-      <span>v<span id="extension-version">1.0.3</span></span>
+      <span>v<span id="extension-version">1.1.0</span></span>
       <button id="check-update" class="inline-action" type="button">检查更新</button>
       <a class="footer-link" href="https://github.com/DouDOU-start/claude-kyc-extension"
         target="_blank" rel="noopener noreferrer" aria-label="GitHub repository">

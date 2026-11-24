@@ -13,6 +13,8 @@
 - 纯扩展，无安装器、无 Native Messaging、无本地服务。
 - 使用 Chrome 侧边栏，切换到 Persona 验证页面后仍保持打开。
 - 下载或克隆后直接加载文件夹。
+- 批量验证 SK，每行一个，固定并发 1。
+- 表格显示批量结果，并可导出 Excel。
 - 自动从 SK 读取组织列表；存在多个组织时才需要选择。
 - 刷新验证链接、重新验证均需手动触发。
 - 验证链接仅接受 HTTPS，约 60 秒后失效。
@@ -51,6 +53,16 @@ Chrome 不能直接把 ZIP 拖进扩展页安装；先解压，再选择文件�
 5. 点击“获取验证链接”取得 Persona 官方验证地址。
 6. 在浏览器中完成验证后，回到扩展点击“刷新状态”。
 
+### 批量查询
+
+1. 切换到“批量查询”。
+2. 每行填写一个 SK。
+3. 点击“开始验证”。
+4. 每完成一个 SK 就更新表格；并发固定为 1。
+5. 点击“导出 Excel”下载 `.xlsx` 文件。
+
+批量模式只查询状态，不生成验证链接；需要获取 Persona 链接时使用单个查询。导出的 SK 已脱敏。
+
 ### 代理格式
 
 ```text
@@ -86,18 +98,19 @@ socks5h://主机:端口
 | `proxy` | 查询期间临时将 `claude.ai` 路由到代理 |
 | `webRequest` + `webRequestAuthProvider` | 提供可选代理认证 |
 | `declarativeNetRequestWithHostAccess` | 为单次请求注入 SK，不修改浏览器 Cookie |
-| `storage` | 保存浏览器会话 SK、代理及请求期间的临时认证信息 |
+| `storage` | 保存代理及请求期间的临时认证信息 |
 | `sidePanel` | 在 Chrome 侧边栏中显示查询界面 |
 | `clipboardWrite` | 复制验证链接 |
 | `host_permissions` | 访问 `claude.ai` 和 GitHub Releases API |
 
 ## 隐私与安全
 
-- SK 保存在浏览器会话存储，关闭浏览器或点击“清空 SK”后清除。
+- SK 只保存在当前侧边栏内存，关闭侧边栏后清除。
 - 代理地址保存在扩展本地存储。
 - 无项目服务器。
 - SK 和代理不会发送到 GitHub。
 - 验证链接仅接受 HTTPS，不自动打开。
+- 批量 SK 只保留在侧边栏内存；导出 Excel 中的 SK 已脱敏。
 
 详见 [PRIVACY.md](PRIVACY.md) 和 [SECURITY.md](SECURITY.md)。
 
@@ -134,6 +147,8 @@ extension/
     kyc.js            解析、状态、校验
     proxy.js          代理解析与 PAC
     release.js        GitHub 更新检查
+    batch.js          批量解析、脱敏、优先级
+    xlsx.js           离线 XLSX 生成
 package.json           Node 测试脚本
 tests/                 Node 测试
 docs/                 截图、架构、发布说明

@@ -13,6 +13,8 @@ A pure Manifest V3 browser extension for checking Claude account KYC status with
 - No installer, native helper, local server, or Go runtime.
 - Runs in the Chrome side panel, so it stays open while you complete verification in another tab.
 - Load the same folder into Chrome or Edge.
+- Batch-verify one SK per line with fixed concurrency 1.
+- Display batch results in a table and export an Excel workbook.
 - Organizations are discovered from the session key; choose one only when multiple are available.
 - Explicit refresh and retry actions for KYC verification.
 - HTTPS-only vendor link validation and a 60-second temporary link window.
@@ -51,6 +53,16 @@ Chrome does not install a ZIP by dragging it onto the extensions page; extract t
 5. Click **获取验证链接** to request the official Persona URL.
 6. Finish verification in the browser, then click **刷新状态**.
 
+### Batch query
+
+1. Switch to **批量查询** / **Batch**.
+2. Enter one SK per line.
+3. Click **开始验证**.
+4. Results appear in the table as each SK finishes; concurrency is fixed at 1.
+5. Click **导出 Excel** to download an `.xlsx` file.
+
+Batch mode performs status queries only. Use single mode when you need to request a Persona verification link. SKs in the exported workbook are masked.
+
 ### Proxy formats
 
 ```text
@@ -86,18 +98,19 @@ If the extension is published to the Chrome Web Store, Chrome handles automatic 
 | `proxy` | Temporarily route `claude.ai` through the entered proxy |
 | `webRequest` + `webRequestAuthProvider` | Supply optional proxy authentication |
 | `declarativeNetRequestWithHostAccess` | Add the session key to the request without touching browser cookies |
-| `storage` | Keep the browser-session SK, proxy, and temporary proxy credentials |
+| `storage` | Keep the proxy and temporary proxy credentials |
 | `sidePanel` | Open the query interface in Chrome's side panel |
 | `clipboardWrite` | Copy the verification URL |
 | `host_permissions` | Access `claude.ai` and the GitHub Releases API |
 
 ## Privacy and security
 
-- The session key is held in browser session storage and is cleared when the browser session ends or **清空 SK** is clicked.
+- The session key is held only in side-panel memory and is cleared when the side panel closes.
 - The proxy URL is stored in local browser storage.
 - No project server is used.
 - The extension never sends the session key or proxy to GitHub.
 - Vendor links are accepted only over HTTPS and are never opened automatically.
+- Batch SKs stay in side-panel memory; exported Excel files contain masked SK values.
 
 See [PRIVACY.md](PRIVACY.md) and [SECURITY.md](SECURITY.md).
 
@@ -134,6 +147,8 @@ extension/
     kyc.js            Parsing, status, validation
     proxy.js          Proxy parsing and PAC generation
     release.js        GitHub update check
+    batch.js          Batch parsing, masking, priority
+    xlsx.js           Offline XLSX writer
 package.json           Node test scripts
 tests/                 Node tests
 docs/                 Screenshot, architecture, release notes

@@ -2,9 +2,10 @@
 
 ## Local data
 
-- **Claude session key**: held in browser session storage; cleared when the browser session ends or the user clicks **清空 SK**. It is injected into a single Claude request and is not written to disk.
+- **Claude session key**: held only in side-panel memory; cleared when the side panel closes. It is injected into a Claude request and is not written to browser storage or disk.
 - **Proxy URL**: stored in the extension's local browser storage for reuse. It may contain credentials.
 - **KYC result**: displayed in the page and not written to a database.
+- **Batch results**: kept in side-panel memory. Excel exports contain masked session keys, organization information, status, timing, and errors.
 
 ## Network requests
 
